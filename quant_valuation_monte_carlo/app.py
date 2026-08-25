@@ -3,358 +3,465 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+from scipy.stats import norm, skew, kurtosis
 import datetime
 
-# --- PAGE CONFIGURATION ---
+# --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(
-    page_title="QuantValuation & Monte Carlo Lab",
-    page_icon="📈",
+    page_title="Quantitative Valuation & Risk Terminal",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for dark/clean financial dashboard look
+# --- THÈME GRAPHIQUE PROFESSIONNEL (SOMBRE INSTITUTIONNEL) ---
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; }
-    .stMetric { background-color: #1a1c24; padding: 15px; border-radius: 8px; border: 1px solid #2d3139; }
-    .metric-card { background-color: #1a1c24; padding: 20px; border-radius: 10px; border: 1px solid #2d3139; margin-bottom: 15px; }
-    h1, h2, h3 { color: #f0f2f6; }
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;600;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    
+    .stApp {
+        background-color: #080a0f;
+        color: #e1e7ec;
+    }
+    
+    section[data-testid="stSidebar"] {
+        background-color: #0e121a;
+        border-right: 1px solid #1c2433;
+    }
+    
+    div[data-testid="stMetricValue"] {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+    
+    div[data-testid="metric-container"] {
+        background-color: #0f141f;
+        border: 1px solid #1c2433;
+        padding: 14px 18px;
+        border-radius: 4px;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        border-bottom: 1px solid #1c2433;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 42px;
+        border-radius: 4px 4px 0 0;
+        color: #8da2b5;
+        background-color: transparent;
+        border: none;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        color: #ffffff !important;
+        background-color: #161e2e !important;
+        border-bottom: 2px solid #2979ff !important;
+    }
+    
+    .header-box {
+        padding: 16px 0 20px 0;
+        border-bottom: 1px solid #1c2433;
+        margin-bottom: 24px;
+    }
+    
+    .badge-bull { color: #00c853; font-weight: 600; }
+    .badge-bear { color: #d50000; font-weight: 600; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR CONTROLS ---
-st.sidebar.title("🛠️ Paramètres & Actifs")
-st.sidebar.markdown("---")
+# --- RECHERCHE ET AUTOCOMPLÉTION D'ACTIFS ---
+@st.cache_data(ttl=1800, show_spinner=False)
+def search_securities(query: str):
+    if not query or len(query.strip()) < 2:
+        return []
+    try:
+        s = yf.Search(query, max_results=10)
+        quotes = s.quotes
+        results = []
+        for q in quotes:
+            symbol = q.get('symbol', '')
+            name = q.get('shortname') or q.get('longname') or symbol
+            quote_type = q.get('quoteType', 'ACTIF')
+            exch = q.get('exchange', '')
+            label = f"{symbol} - {name} ({exch} | {quote_type})"
+            results.append((symbol, label))
+        return results
+    except Exception:
+        return []
 
-ticker_input = st.sidebar.text_input("Ticker Principal (Yahoo Finance)", value="AAPL").upper().strip()
-peers_input = st.sidebar.text_input("Tickers Comparables (Pairs)", value="MSFT, GOOGL, AMZN, META").upper().strip()
-peer_list = [p.strip() for p in peers_input.split(",") if p.strip()]
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("🎲 Paramètres Monte Carlo")
-n_simulations = st.sidebar.slider("Nombre de simulations (chemins)", min_value=100, max_value=10000, value=2500, step=100)
-forecast_days = st.sidebar.slider("Horizon de prédiction (jours ouvrés)", min_value=30, max_value=756, value=252, step=21, help="252 jours = 1 an boursier")
-history_years = st.sidebar.selectbox("Historique de volatilité", options=[1, 3, 5, 10], index=3)
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("🔗 Actif de Corrélation Externe")
-macro_ticker = st.sidebar.text_input("Actif/Matière/Indice à corréler", value="GC=F", help="Ex: GC=F (Or), CL=F (Pétrole), ^GSPC (S&P 500), BTC-USD").upper().strip()
-
-# --- CACHED DATA FETCHING ---
-@st.cache_data(ttl=3600)
-def fetch_stock_history(ticker, years=10):
-    start_date = datetime.datetime.now() - datetime.timedelta(days=years*365 + 30)
+# --- CHARGEMENT DES SÉRIES TEMPORELLES ---
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_historical_series(ticker: str, years: int = 5):
+    start_date = datetime.datetime.now() - datetime.timedelta(days=years * 365 + 30)
     data = yf.download(ticker, start=start_date, progress=False)
+    if data.empty:
+        return pd.Series(dtype=float)
     if isinstance(data.columns, pd.MultiIndex):
-        data = data['Close'] if 'Close' in data else data.iloc[:, 0]
+        prices = data['Close'] if 'Close' in data else data.iloc[:, 0]
     elif 'Close' in data.columns:
-        data = data['Close']
-    return pd.Series(data.dropna().values.ravel(), index=data.dropna().index, name=ticker)
+        prices = data['Close']
+    else:
+        prices = data.iloc[:, 0]
+    return pd.Series(prices.dropna().values.ravel(), index=prices.dropna().index, name=ticker)
 
-@st.cache_data(ttl=3600)
-def fetch_financial_metrics(tickers):
+# --- CHARGEMENT DES FONDAMENTAUX ---
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_fundamentals(tickers: tuple):
     metrics = []
     for t in tickers:
         try:
             info = yf.Ticker(t).info
-            pe = info.get('trailingPE', np.nan)
-            forward_pe = info.get('forwardPE', np.nan)
-            ev_ebitda = info.get('enterpriseToEbitda', np.nan)
-            ps_ratio = info.get('priceToSalesTrailing12Months', np.nan)
-            pb_ratio = info.get('priceToBook', np.nan)
-            market_cap = info.get('marketCap', np.nan)
-            name = info.get('shortName', t)
-            
             metrics.append({
                 'Ticker': t,
-                'Nom': name,
-                'Market Cap ($B)': market_cap / 1e9 if pd.notnull(market_cap) else np.nan,
-                'P/E (Trailing)': pe,
-                'Forward P/E': forward_pe,
-                'EV/EBITDA': ev_ebitda,
-                'P/S': ps_ratio,
-                'P/B': pb_ratio
+                'Nom': info.get('shortName', t),
+                'Capitalisation ($B)': (info.get('marketCap') or np.nan) / 1e9,
+                'P/E (Trailing)': info.get('trailingPE', np.nan),
+                'Forward P/E': info.get('forwardPE', np.nan),
+                'EV/EBITDA': info.get('enterpriseToEbitda', np.nan),
+                'P/S': info.get('priceToSalesTrailing12Months', np.nan),
+                'P/B': info.get('priceToBook', np.nan)
             })
         except Exception:
             metrics.append({'Ticker': t, 'Nom': t})
     return pd.DataFrame(metrics)
 
-# --- MAIN APP LAYOUT ---
-st.title("📈 Platforme Quantitative : Valorisation & Monte Carlo (GBM)")
-st.markdown(f"Analyse approfondie de **{ticker_input}** couplée à un modèle d'évaluation par multiples sectoriels et simulation stochastique.")
+# --- BARRE LATÉRALE DE CONTRÔLE ---
+st.sidebar.markdown("### Univers & Paramètres")
 
-tabs = st.tabs(["📊 1. Modèle de Valorisation (Multiples)", "🎲 2. Simulation Monte Carlo (Mouvement Brownien)", "🔗 3. Étude de Corrélation (Macro & Métriques)"])
+search_term = st.sidebar.text_input("Recherche d'actif (ex: nasdaq, aapl, sp500, qqq)", value="NASDAQ")
+search_results = search_securities(search_term)
+
+if search_results:
+    selected_tuple = st.sidebar.selectbox(
+        "Résultats disponibles :",
+        options=search_results,
+        format_func=lambda x: x[1]
+    )
+    primary_ticker = selected_tuple[0]
+else:
+    fallback = search_term.upper().strip() if search_term else "QQQ"
+    st.sidebar.caption(f"Recherche directe du symbole : **{fallback}**")
+    primary_ticker = fallback
+
+peers_input = st.sidebar.text_input(
+    "Actifs comparables (séparés par des virgules)", 
+    value="SPY, IWM, DIA" if "QQQ" in primary_ticker or "IXIC" in primary_ticker else "MSFT, GOOGL, AMZN, NVDA"
+)
+peer_list = [p.strip().upper() for p in peers_input.split(",") if p.strip()]
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Modélisation Stochastique")
+n_simulations = st.sidebar.slider("Trajectoires Monte Carlo", min_value=500, max_value=10000, value=2500, step=500)
+forecast_days = st.sidebar.slider("Horizon de prévision (jours ouvrés)", min_value=21, max_value=504, value=252, step=21)
+history_years = st.sidebar.selectbox("Profondeur historique (années)", options=[1, 3, 5, 10], index=2)
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Facteur Macro / Benchmark")
+macro_ticker = st.sidebar.text_input("Symbole de référence", value="^GSPC")
+
+# --- EN-TÊTE PRINCIPAL ---
+st.markdown(f"""
+<div class="header-box">
+    <div style="font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: #5f748a;">Plateforme Quantitative Institutionnelle</div>
+    <div style="font-size: 1.7rem; font-weight: 700; color: #ffffff; margin-top: 4px;">ANALYSE D'ACTIF : {primary_ticker}</div>
+</div>
+""", unsafe_allow_html=True)
+
+tabs = st.tabs([
+    "1. Multiples & Valorisation",
+    "2. Mouvement Brownien & Monte Carlo",
+    "3. Gestion des Risques (VaR & CVaR)",
+    "4. Analyse Factorielle & Corrélations"
+])
 
 # -------------------------------------------------------------
-# TAB 1: VALUATION MODEL
+# ONGLET 1 : VALORISATION PAR MULTIPLES
 # -------------------------------------------------------------
 with tabs[0]:
-    st.header("1. Valorisation Relative par les Multiples (Peer Valuation)")
-    st.markdown("""
-    Ce module compare les ratios clés (**P/E, EV/EBITDA, P/S, P/B**) de l'action ciblée avec ses pairs sectoriels.
-    - **Barre supérieure à la médiane sectorielle** ➔ L'action se négocie avec une prime (**Surévaluée**).
-    - **Barre inférieure à la médiane sectorielle** ➔ L'action se négocie avec une décote (**Sous-évaluée**).
-    """)
+    st.markdown("#### Valorisation Relative Sectorielle")
     
-    with st.spinner("Téléchargement des données fondamentales..."):
-        all_tickers = [ticker_input] + peer_list
-        df_metrics = fetch_financial_metrics(all_tickers)
+    with st.spinner("Extraction des ratios de marché..."):
+        all_tickers = tuple([primary_ticker] + [p for p in peer_list if p != primary_ticker])
+        df_metrics = fetch_fundamentals(all_tickers)
     
-    if not df_metrics.empty:
-        col1, col2 = st.columns([1, 2])
+    if not df_metrics.empty and 'P/E (Trailing)' in df_metrics.columns:
+        col_tbl, col_chart = st.columns([1, 1])
         
-        with col1:
-            st.subheader("Tableau des Ratios Financiers")
-            st.dataframe(df_metrics.set_index('Ticker').style.format({
-                'Market Cap ($B)': '{:.2f}B',
-                'P/E (Trailing)': '{:.2f}',
-                'Forward P/E': '{:.2f}',
-                'EV/EBITDA': '{:.2f}',
-                'P/S': '{:.2f}',
-                'P/B': '{:.2f}'
-            }), height=300)
-            
+        with col_tbl:
+            st.dataframe(
+                df_metrics.set_index('Ticker').style.format({
+                    'Capitalisation ($B)': lambda x: f"{x:.2f}B" if pd.notnull(x) else "-",
+                    'P/E (Trailing)': lambda x: f"{x:.2f}" if pd.notnull(x) else "-",
+                    'Forward P/E': lambda x: f"{x:.2f}" if pd.notnull(x) else "-",
+                    'EV/EBITDA': lambda x: f"{x:.2f}" if pd.notnull(x) else "-",
+                    'P/S': lambda x: f"{x:.2f}" if pd.notnull(x) else "-",
+                    'P/B': lambda x: f"{x:.2f}" if pd.notnull(x) else "-"
+                }),
+                use_container_width=True
+            )
             selected_ratio = st.selectbox(
-                "Sélectionnez le Multiple à analyser en Bar Chart :",
+                "Multiple de valorisation à analyser :",
                 ["P/E (Trailing)", "Forward P/E", "EV/EBITDA", "P/S", "P/B"]
             )
             
-        with col2:
-            st.subheader(f"Comparaison du Multiple : {selected_ratio}")
-            
-            # Filter clean data
+        with col_chart:
             df_plot = df_metrics.dropna(subset=[selected_ratio]).copy()
             if not df_plot.empty:
-                median_val = df_plot[selected_ratio].median()
+                med_val = df_plot[selected_ratio].median()
                 
-                # Colors: Accent for target, grey/blue for peers
-                colors = []
+                bar_colors = []
                 for t in df_plot['Ticker']:
-                    if t == ticker_input:
+                    if t == primary_ticker:
                         val = df_plot.loc[df_plot['Ticker'] == t, selected_ratio].values[0]
-                        colors.append('#00e676' if val <= median_val else '#ff5252') # Green if cheap, Red if expensive
+                        bar_colors.append('#00c853' if val <= med_val else '#d50000')
                     else:
-                        colors.append('#3f51b5')
+                        bar_colors.append('#2979ff')
                 
                 fig_bar = go.Figure()
                 fig_bar.add_trace(go.Bar(
                     x=df_plot['Ticker'],
                     y=df_plot[selected_ratio],
-                    marker_color=colors,
+                    marker=dict(color=bar_colors, line=dict(width=0)),
                     text=df_plot[selected_ratio].apply(lambda x: f"{x:.1f}x"),
                     textposition='outside'
                 ))
-                
                 fig_bar.add_hline(
-                    y=median_val, 
-                    line_dash="dash", 
-                    line_color="#ffd600",
-                    annotation_text=f"Médiane Sectorielle ({median_val:.1f}x)",
+                    y=med_val,
+                    line=dict(color='#ffab00', dash='dash', width=1.5),
+                    annotation_text=f"Médiane : {med_val:.1f}x",
                     annotation_position="top right"
                 )
-                
                 fig_bar.update_layout(
                     template="plotly_dark",
-                    title=f"Positionnement relatif du {selected_ratio} vs Secteur",
-                    xaxis_title="Ticker",
-                    yaxis_title=f"{selected_ratio} (Multiples)",
-                    margin=dict(l=20, r=20, t=50, b=20)
+                    paper_bgcolor="#080a0f",
+                    plot_bgcolor="#0e121a",
+                    margin=dict(l=20, r=20, t=30, b=20),
+                    yaxis_title=f"Multiple ({selected_ratio})"
                 )
                 st.plotly_chart(fig_bar, use_container_width=True)
-                
-                # Assessment Text
-                target_ratio_val = df_metrics.loc[df_metrics['Ticker'] == ticker_input, selected_ratio].values
-                if len(target_ratio_val) > 0 and not np.isnan(target_ratio_val[0]):
-                    diff_pct = ((target_ratio_val[0] - median_val) / median_val) * 100
-                    if diff_pct > 5:
-                        st.warning(f"⚠️ **{ticker_input}** est **SURÉVALUÉE** de **{diff_pct:.1f}%** par rapport à la médiane de ses pairs sur le ratio {selected_ratio}.")
-                    elif diff_pct < -5:
-                        st.success(f"✅ **{ticker_input}** est **SOUS-ÉVALUÉE** (Décote) de **{abs(diff_pct):.1f}%** par rapport à la médiane de ses pairs sur le ratio {selected_ratio}.")
-                    else:
-                        st.info(f"ℹ️ **{ticker_input}** est alignée avec la valorisation médiane de ses pairs.")
 
 # -------------------------------------------------------------
-# TAB 2: MONTE CARLO & BROWNIAN MOTION
+# ONGLET 2 : MONTE CARLO & GBM
 # -------------------------------------------------------------
 with tabs[1]:
-    st.header("2. Simulation Stochastique (Geometric Brownian Motion)")
+    st.markdown("#### Modélisation Stochastique (Mouvement Brownien Géométrique)")
     st.markdown(r"""
-    Le modèle standard de valorisation quantitative repose sur l'équation différentielle stochastique du **Mouvement Brownien Géométrique (GBM)** :
+    Équation différentielle stochastique (EDS) sous la filtration de Wiener :
     $$dS_t = \mu S_t dt + \sigma S_t dW_t$$
-    En appliquant le Lemme d'Itô, la solution exacte pour le prix à l'instant $t$ est :
-    $$S_t = S_0 \exp\left(\left(\mu - rac{1}{2}\sigma^2ight)t + \sigma W_tight)$$
+    
+    Solution analytique continue déduite par le Lemme d'Itô :
+    $$S_t = S_0 \exp\left( \left(\mu - \frac{1}{2}\sigma^2\right)t + \sigma W_t \right)$$
     """)
     
-    with st.spinner(f"Téléchargement de l'historique sur {history_years} ans pour {ticker_input}..."):
-        hist_prices = fetch_stock_history(ticker_input, years=history_years)
+    with st.spinner("Téléchargement des données de clôture..."):
+        hist_prices = fetch_historical_series(primary_ticker, years=history_years)
     
     if len(hist_prices) > 30:
-        # Calculate daily log returns
-        log_returns = np.log(hist_prices / hist_prices.shift(1)).dropna()
+        log_ret = np.log(hist_prices / hist_prices.shift(1)).dropna()
+        mu_daily = float(log_ret.mean())
+        sigma_daily = float(log_ret.std())
         
-        mu_daily = log_returns.mean()
-        sigma_daily = log_returns.std()
-        
-        # Annualized values (252 trading days)
-        mu_annual = mu_daily * 252
-        sigma_annual = sigma_daily * np.sqrt(252)
+        mu_ann = mu_daily * 252
+        sigma_ann = sigma_daily * np.sqrt(252)
         s0 = float(hist_prices.iloc[-1])
         
-        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-        m_col1.metric("Prix Actuel (S₀)", f"${s0:.2f}")
-        m_col2.metric("Rendement Moyen Historique (Drift μ)", f"{mu_annual*100:.2f}% /an")
-        m_col3.metric("Volatilité Historique (σ)", f"{sigma_annual*100:.2f}% /an")
-        m_col4.metric("Simulations Vectorisées", f"{n_simulations:,}")
-        
-        # Vectorized GBM Simulation (Numpy)
-        dt = 1 # 1 day step
+        # Simulation vectorisée
+        shocks = np.random.normal(0, 1, (forecast_days, n_simulations))
         drift = (mu_daily - 0.5 * (sigma_daily ** 2))
+        daily_returns_sim = drift + sigma_daily * shocks
+        price_trajectories = s0 * np.exp(np.vstack([np.zeros((1, n_simulations)), np.cumsum(daily_returns_sim, axis=0)]))
         
-        # Random standard normal matrix of shape (forecast_days, n_simulations)
-        random_shocks = np.random.normal(0, 1, (forecast_days, n_simulations))
-        daily_log_returns_sim = drift + sigma_daily * random_shocks
+        final_prices = price_trajectories[-1, :]
+        p5 = float(np.percentile(final_prices, 5))
+        p50 = float(np.percentile(final_prices, 50))
+        p95 = float(np.percentile(final_prices, 95))
+        prob_bull = float(np.mean(final_prices > s0) * 100)
         
-        # Cumsum to get price trajectory
-        price_paths = np.vstack([np.zeros((1, n_simulations)), np.cumsum(daily_log_returns_sim, axis=0)])
-        simulated_prices = s0 * np.exp(price_paths)
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Prix Actuel ($S_0$)", f"${s0:.2f}")
+        m2.metric("Drift Annualisé (μ)", f"{mu_ann * 100:+.2f}%")
+        m3.metric("Volatilité (σ)", f"{sigma_ann * 100:.2f}%")
+        m4.metric("Médiane à Terme", f"${p50:.2f}", f"{((p50 - s0) / s0) * 100:+.2f}%")
+        m5.metric("Probabilité de Gain", f"{prob_bull:.1f}%")
         
-        final_prices = simulated_prices[-1, :]
-        p5 = np.percentile(final_prices, 5)
-        p25 = np.percentile(final_prices, 25)
-        p50 = np.percentile(final_prices, 50) # Median (most probable path)
-        p75 = np.percentile(final_prices, 75)
-        p95 = np.percentile(final_prices, 95)
+        c_sim1, c_sim2 = st.columns([3, 2])
         
-        # Layout plots
-        col_chart1, col_chart2 = st.columns([3, 2])
-        
-        with col_chart1:
-            st.subheader(f"Trajectoires Monte Carlo ({min(n_simulations, 100)} affichées)")
-            fig_sim = go.Figure()
+        with c_sim1:
+            fig_paths = go.Figure()
+            time_steps = list(range(forecast_days + 1))
             
-            # Plot first 100 sample paths for performance and clear display
-            display_samples = min(n_simulations, 120)
-            time_axis = list(range(forecast_days + 1))
-            
-            for i in range(display_samples):
-                fig_sim.add_trace(go.Scatter(
-                    x=time_axis,
-                    y=simulated_prices[:, i],
-                    mode='lines',
-                    line=dict(width=0.8, color='rgba(0, 230, 118, 0.15)'),
-                    showlegend=False,
-                    hoverinfo='skip'
+            # Échantillon de trajectoires bicolores (vert si final > S0, rouge sinon)
+            sample_size = min(n_simulations, 100)
+            for j in range(sample_size):
+                path = price_trajectories[:, j]
+                is_bull = path[-1] >= s0
+                path_color = 'rgba(0, 200, 83, 0.12)' if is_bull else 'rgba(213, 0, 0, 0.12)'
+                fig_paths.add_trace(go.Scatter(
+                    x=time_steps, y=path, mode='lines',
+                    line=dict(color=path_color, width=1),
+                    showlegend=False, hoverinfo='skip'
                 ))
             
-            # Add Median Path
-            median_path = np.median(simulated_prices, axis=1)
-            fig_sim.add_trace(go.Scatter(
-                x=time_axis,
-                y=median_path,
-                mode='lines',
-                line=dict(color='#ffd600', width=3),
-                name='Trajectoire Médiane (La + probable)'
+            # Lignes directrices quantiles
+            fig_paths.add_trace(go.Scatter(
+                x=time_steps, y=np.percentile(price_trajectories, 95, axis=1),
+                mode='lines', line=dict(color='#00c853', width=1.5, dash='dash'), name='Percentile 95% (Hausse)'
+            ))
+            fig_paths.add_trace(go.Scatter(
+                x=time_steps, y=np.median(price_trajectories, axis=1),
+                mode='lines', line=dict(color='#ffab00', width=2), name='Trajectoire Médiane (50%)'
+            ))
+            fig_paths.add_trace(go.Scatter(
+                x=time_steps, y=np.percentile(price_trajectories, 5, axis=1),
+                mode='lines', line=dict(color='#d50000', width=1.5, dash='dash'), name='Percentile 5% (Baisse)'
             ))
             
-            # Percentiles 5% and 95%
-            p5_path = np.percentile(simulated_prices, 5, axis=1)
-            p95_path = np.percentile(simulated_prices, 95, axis=1)
-            fig_sim.add_trace(go.Scatter(
-                x=time_axis, y=p95_path, mode='lines',
-                line=dict(color='#00e5ff', width=1.5, dash='dash'), name='Percentile 95% (Scénario Haussier)'
-            ))
-            fig_sim.add_trace(go.Scatter(
-                x=time_axis, y=p5_path, mode='lines',
-                line=dict(color='#ff5252', width=1.5, dash='dash'), name='Percentile 5% (Scénario Baissier / VaR)'
-            ))
-            
-            fig_sim.update_layout(
+            fig_paths.update_layout(
                 template="plotly_dark",
-                xaxis_title="Jours de Bourse Futurs",
+                paper_bgcolor="#080a0f",
+                plot_bgcolor="#0e121a",
+                xaxis_title="Jours Ouvrés Futurs",
                 yaxis_title="Prix ($)",
                 margin=dict(l=20, r=20, t=30, b=20),
-                legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01, bgcolor="rgba(0,0,0,0.5)")
+                legend=dict(yanchor="top", y=0.98, xanchor="left", x=0.02, bgcolor="rgba(14,18,26,0.8)")
             )
-            st.plotly_chart(fig_sim, use_container_width=True)
+            st.plotly_chart(fig_paths, use_container_width=True)
             
-        with col_chart2:
-            st.subheader("Distribution du Prix Final")
-            fig_dist = go.Figure()
-            fig_dist.add_trace(go.Histogram(
-                x=final_prices,
-                nbinsx=50,
-                marker_color='#3f51b5',
-                opacity=0.75,
-                name="Fréquence"
+        with c_sim2:
+            fig_hist = go.Figure()
+            fig_hist.add_trace(go.Histogram(
+                x=final_prices[final_prices >= s0],
+                nbinsx=30, marker_color='#00c853', opacity=0.7, name="Trajectoires Haussières"
             ))
-            fig_dist.add_vline(x=p50, line_color="#ffd600", line_width=2, line_dash="solid", annotation_text=f"Médiane : ${p50:.2f}")
-            fig_dist.add_vline(x=p5, line_color="#ff5252", line_width=2, line_dash="dash", annotation_text=f"5% : ${p5:.2f}")
-            fig_dist.add_vline(x=p95, line_color="#00e5ff", line_width=2, line_dash="dash", annotation_text=f"95% : ${p95:.2f}")
-            
-            fig_dist.update_layout(
+            fig_hist.add_trace(go.Histogram(
+                x=final_prices[final_prices < s0],
+                nbinsx=30, marker_color='#d50000', opacity=0.7, name="Trajectoires Baissières"
+            ))
+            fig_hist.add_vline(x=s0, line_color="#ffffff", line_dash="dash", line_width=1, annotation_text="Prix Initial")
+            fig_hist.add_vline(x=p50, line_color="#ffab00", line_width=2, annotation_text=f"Médiane (${p50:.1f})")
+            fig_hist.update_layout(
+                barmode='overlay',
                 template="plotly_dark",
-                xaxis_title=f"Prix après {forecast_days} jours ($)",
-                yaxis_title="Nombre d'occurrences",
-                margin=dict(l=20, r=20, t=30, b=20)
+                paper_bgcolor="#080a0f",
+                plot_bgcolor="#0e121a",
+                xaxis_title="Prix Terminal ($)",
+                yaxis_title="Nombre de scénarios",
+                margin=dict(l=20, r=20, t=30, b=20),
+                showlegend=False
             )
-            st.plotly_chart(fig_dist, use_container_width=True)
-            
-        # Summary Quant Table
-        st.subheader("📊 Métriques de Risque & Probabilités Associées")
-        q1, q2, q3, q4, q5 = st.columns(5)
-        prob_gain = (np.sum(final_prices > s0) / n_simulations) * 100
-        
-        q1.metric("Prix Plus Probable (Médiane)", f"${p50:.2f}", f"{((p50-s0)/s0)*100:+.1f}%")
-        q2.metric("Scénario Baissier (5%)", f"${p5:.2f}", f"{((p5-s0)/s0)*100:+.1f}%")
-        q3.metric("Scénario Haussier (95%)", f"${p95:.2f}", f"{((p95-s0)/s0)*100:+.1f}%")
-        q4.metric("Probabilité de Plus-Value", f"{prob_gain:.1f}%")
-        q5.metric("Value at Risk (95% VaR)", f"-${s0 - p5:.2f}")
-
+            st.plotly_chart(fig_hist, use_container_width=True)
     else:
-        st.error(f"Données insuffisantes pour {ticker_input}. Veuillez vérifier le symbole boursier.")
+        st.warning(f"Données de cours insuffisantes pour {primary_ticker}.")
 
 # -------------------------------------------------------------
-# TAB 3: CORRELATION & MACRO ANALYSIS
+# ONGLET 3 : VALUE-AT-RISK (VaR) & CVaR / EXPECTED SHORTFALL
 # -------------------------------------------------------------
 with tabs[2]:
-    st.header("3. Analyse de Corrélation (Test d'Hypothèses & Données Historiques)")
-    st.markdown("""
-    Comparez l'historique sur 10 ans de votre action avec un indice macroéconomique, une matière première ou un actif externe 
-    pour vérifier si les hypothèses intuitives (ex: corrélation entre deux marchés) sont statistiquement valables ou illusoires.
+    st.markdown("#### Métriques Avancées : Value-at-Risk (VaR) & Expected Shortfall (CVaR)")
+    st.markdown(r"""
+    Ajustement non-gaussien de **Cornish-Fisher** pour séries financières asymétriques et à queues épaisses :
+    $$z_c = z_\alpha + \frac{1}{6}(z_\alpha^2 - 1)S + \frac{1}{24}(z_\alpha^3 - 3z_\alpha)K - \frac{1}{36}(2z_\alpha^3 - 5z_\alpha)S^2$$
+    $$\text{VaR}_{1-\alpha} = - \left( \mu + z_c \cdot \sigma \right)$$
+    $$\text{CVaR}_{1-\alpha} = \mathbb{E}\left[ -R \mid R \le -\text{VaR}_{1-\alpha} \right]$$
     """)
     
-    with st.spinner("Téléchargement des séries temporelles synchronisées..."):
-        s_target = fetch_stock_history(ticker_input, years=history_years)
-        s_macro = fetch_stock_history(macro_ticker, years=history_years)
+    if len(hist_prices) > 30:
+        returns = log_ret.values
+        confidence_level = st.slider("Niveau de confiance statistique (1 - α)", min_value=0.90, max_value=0.99, value=0.95, step=0.01)
+        alpha = 1.0 - confidence_level
         
-        df_corr = pd.DataFrame({
-            ticker_input: s_target,
-            macro_ticker: s_macro
-        }).dropna()
+        # Statistiques d'ordre supérieur
+        s = skew(returns)
+        k = kurtosis(returns) # Kurtosis excessif
+        z_norm = norm.ppf(alpha)
         
-    if not df_corr.empty:
-        # Normalized performance (base 100)
-        df_norm = (df_corr / df_corr.iloc[0]) * 100
+        # Formule Cornish-Fisher
+        z_cf = (z_norm + 
+                (1/6) * (z_norm**2 - 1) * s + 
+                (1/24) * (z_norm**3 - 3*z_norm) * k - 
+                (1/36) * (2*z_norm**3 - 5*z_norm) * (s**2))
         
-        # Pearson & Spearman correlation
-        pearson_corr = df_corr[ticker_input].corr(df_corr[macro_ticker])
-        returns_corr = df_corr[ticker_input].pct_change().corr(df_corr[macro_ticker].pct_change())
+        var_cf_daily = -(mu_daily + z_cf * sigma_daily)
+        var_hist_daily = -np.percentile(returns, alpha * 100)
+        cvar_hist_daily = -returns[returns <= -var_hist_daily].mean()
         
-        c_col1, c_col2 = st.columns(2)
-        c_col1.metric("Corrélation de Prix (Niveau)", f"{pearson_corr:.3f}", help="De -1 (opposition totale) à +1 (parfaite synchronisation)")
-        c_col2.metric("Corrélation des Rendements Quotidiens", f"{returns_corr:.3f}", help="Plus pertinent pour le trading : mesure si les variations journalières vont dans le même sens")
+        r1, r2, r3, r4 = st.columns(4)
+        r1.metric("Asymétrie (Skewness)", f"{s:.3f}")
+        r2.metric("Aplatissement (Excess Kurtosis)", f"{k:.3f}")
+        r3.metric(f"VaR {confidence_level*100:.0f}% (1 jour)", f"{var_cf_daily*100:.2f}%", f"-${s0 * var_cf_daily:.2f}")
+        r4.metric(f"CVaR {confidence_level*100:.0f}% (Expected Shortfall)", f"{cvar_hist_daily*100:.2f}%", f"-${s0 * cvar_hist_daily:.2f}")
         
-        fig_dual = go.Figure()
-        fig_dual.add_trace(go.Scatter(x=df_norm.index, y=df_norm[ticker_input], name=f"{ticker_input} (Base 100)", line=dict(color='#00e676', width=2)))
-        fig_dual.add_trace(go.Scatter(x=df_norm.index, y=df_norm[macro_ticker], name=f"{macro_ticker} (Base 100)", line=dict(color='#ff9100', width=2)))
-        
-        fig_dual.update_layout(
+        # Distribution empirique vs seuil VaR
+        fig_var = go.Figure()
+        fig_var.add_trace(go.Histogram(
+            x=returns * 100,
+            nbinsx=80,
+            marker_color='#2979ff',
+            opacity=0.6,
+            name="Rendements Quotidiens"
+        ))
+        fig_var.add_vline(x=-var_cf_daily * 100, line_color="#d50000", line_width=2, annotation_text=f"VaR CF ({var_cf_daily*100:.2f}%)")
+        fig_var.add_vline(x=-cvar_hist_daily * 100, line_color="#ff1744", line_width=2, line_dash="dash", annotation_text=f"CVaR ({cvar_hist_daily*100:.2f}%)")
+        fig_var.update_layout(
             template="plotly_dark",
-            title=f"Performance Comparée (Base 100) : {ticker_input} vs {macro_ticker}",
-            xaxis_title="Date",
-            yaxis_title="Évolution relative (Base 100)",
-            margin=dict(l=20, r=20, t=50, b=20)
+            paper_bgcolor="#080a0f",
+            plot_bgcolor="#0e121a",
+            xaxis_title="Rendement Journalier (%)",
+            yaxis_title="Effectif",
+            margin=dict(l=20, r=20, t=30, b=20)
         )
-        st.plotly_chart(fig_dual, use_container_width=True)
+        st.plotly_chart(fig_var, use_container_width=True)
+
+# -------------------------------------------------------------
+# ONGLET 4 : CORRÉLATION FACTORIELLE & BENCHMARK
+# -------------------------------------------------------------
+with tabs[3]:
+    st.markdown("#### Matrice et Dynamique de Corrélation")
+    
+    with st.spinner("Synchronisation des séries temporelles..."):
+        s_target = fetch_historical_series(primary_ticker, years=history_years)
+        s_bench = fetch_historical_series(macro_ticker, years=history_years)
+        df_pair = pd.DataFrame({primary_ticker: s_target, macro_ticker: s_bench}).dropna()
+    
+    if not df_pair.empty:
+        df_rebased = (df_pair / df_pair.iloc[0]) * 100
+        returns_pair = df_pair.pct_change().dropna()
+        
+        corr_levels = df_pair[primary_ticker].corr(df_pair[macro_ticker])
+        corr_returns = returns_pair[primary_ticker].corr(returns_pair[macro_ticker])
+        
+        # Calcul du Bêta de marché
+        cov_matrix = np.cov(returns_pair[primary_ticker], returns_pair[macro_ticker])
+        beta = cov_matrix[0, 1] / cov_matrix[1, 1]
+        
+        b1, b2, b3 = st.columns(3)
+        b1.metric("Corrélation des Rendements", f"{corr_returns:.3f}")
+        b2.metric("Corrélation des Niveaux de Prix", f"{corr_levels:.3f}")
+        b3.metric(f"Bêta par rapport à {macro_ticker}", f"{beta:.2f}")
+        
+        fig_corr = go.Figure()
+        fig_corr.add_trace(go.Scatter(
+            x=df_rebased.index, y=df_rebased[primary_ticker],
+            name=f"{primary_ticker} (Base 100)", line=dict(color='#00c853', width=1.5)
+        ))
+        fig_corr.add_trace(go.Scatter(
+            x=df_rebased.index, y=df_rebased[macro_ticker],
+            name=f"{macro_ticker} (Base 100)", line=dict(color='#ffab00', width=1.5)
+        ))
+        fig_corr.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="#080a0f",
+            plot_bgcolor="#0e121a",
+            xaxis_title="Date",
+            yaxis_title="Base 100",
+            margin=dict(l=20, r=20, t=30, b=20)
+        )
+        st.plotly_chart(fig_corr, use_container_width=True)
