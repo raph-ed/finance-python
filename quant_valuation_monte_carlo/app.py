@@ -6,14 +6,14 @@ import plotly.graph_objects as go
 from scipy.stats import norm, t as student_t, skew, kurtosis
 import datetime
 
-# --- CONFIGURATION DE LA PAGE ---
+# Configuration page
 st.set_page_config(
     page_title="QuantTerminal Pro | Valuation & Stochastic Suite",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- NAVIGATION ---
+# Etat session
 if "page" not in st.session_state:
     st.session_state.page = "home"
 if "selected_ticker" not in st.session_state:
@@ -31,7 +31,7 @@ def go_to_terminal(ticker=None, peers=None):
 def go_to_home():
     st.session_state.page = "home"
 
-# --- CSS SUR MESURE (SUPPRESSION TOTALE DU ROUGE STREAMLIT & CARTES GLASSMORPHISM) ---
+# Styles CSS
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -45,43 +45,110 @@ st.markdown("""
     }
     
     .stApp {
-        background: radial-gradient(circle at 20% 10%, #0d1b2a 0%, #070b12 50%, #05070b 100%);
+        background: radial-gradient(circle at 20% 10%, #0e1e38 0%, #080d1a 45%, #05070e 100%);
         color: #e2e8f0;
     }
     
+    /* Barre laterale */
     section[data-testid="stSidebar"] {
-        background-color: #080c14 !important;
-        border-right: 1px solid rgba(0, 229, 255, 0.16);
+        background: linear-gradient(180deg, #0b1324 0%, #070b14 55%, #050811 100%) !important;
+        border-right: 1px solid rgba(0, 229, 255, 0.25);
+        box-shadow: 6px 0 28px rgba(0, 0, 0, 0.6);
     }
 
-    /* Remplacement du ROUGE Streamlit sur les Tags Multiselect (Chips) */
+    .sidebar-brand {
+        background: linear-gradient(135deg, rgba(0, 229, 255, 0.14), rgba(0, 230, 118, 0.08));
+        border: 1px solid rgba(0, 229, 255, 0.35);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        text-align: center;
+    }
+
+    .sidebar-section {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.74rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #00e5ff;
+        padding: 8px 12px;
+        margin: 18px 0 10px 0;
+        background: linear-gradient(90deg, rgba(0, 229, 255, 0.16) 0%, rgba(124, 77, 255, 0.06) 100%);
+        border-left: 3px solid #00e676;
+        border-radius: 0 6px 6px 0;
+    }
+
+    /* Champs saisie barre laterale */
+    section[data-testid="stSidebar"] div[data-baseweb="input"] > div,
+    section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
+        background-color: rgba(14, 23, 42, 0.9) !important;
+        border: 1px solid rgba(0, 229, 255, 0.28) !important;
+        border-radius: 8px !important;
+        color: #f8fafc !important;
+        transition: all 0.2s ease;
+    }
+
+    section[data-testid="stSidebar"] div[data-baseweb="input"] > div:focus-within,
+    section[data-testid="stSidebar"] div[data-baseweb="select"] > div:focus-within {
+        border-color: #00e676 !important;
+        box-shadow: 0 0 12px rgba(0, 230, 118, 0.3) !important;
+    }
+
+    section[data-testid="stSidebar"] label {
+        color: #cbd5e1 !important;
+        font-size: 0.82rem !important;
+        font-weight: 500 !important;
+    }
+
+    /* Boutons */
+    .stButton > button {
+        background: linear-gradient(135deg, rgba(0, 229, 255, 0.16) 0%, rgba(0, 230, 118, 0.12) 100%) !important;
+        border: 1px solid rgba(0, 229, 255, 0.4) !important;
+        color: #f1f5f9 !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        font-size: 0.84rem !important;
+        padding: 0.5rem 0.9rem !important;
+        transition: all 0.2s ease !important;
+    }
+
+    .stButton > button:hover {
+        border-color: #00e676 !important;
+        background: linear-gradient(135deg, rgba(0, 230, 118, 0.28) 0%, rgba(0, 229, 255, 0.24) 100%) !important;
+        box-shadow: 0 0 16px rgba(0, 229, 255, 0.3) !important;
+        color: #ffffff !important;
+    }
+
+    /* Tags multiselect */
     span[data-baseweb="tag"] {
-        background-color: rgba(0, 230, 118, 0.15) !important;
-        border: 1px solid rgba(0, 230, 118, 0.5) !important;
+        background: linear-gradient(135deg, rgba(0, 230, 118, 0.22), rgba(0, 229, 255, 0.22)) !important;
+        border: 1px solid #00e676 !important;
         color: #00e676 !important;
         border-radius: 6px !important;
         font-weight: 600 !important;
     }
     span[data-baseweb="tag"] span {
-        color: #00e676 !important;
+        color: #e2f8ee !important;
     }
 
-    /* Remplacement du ROUGE sur les Sliders & Radios */
+    /* Curseurs */
     div[data-baseweb="slider"] div[role="slider"] {
-        background-color: #00e676 !important;
-        box-shadow: 0 0 10px rgba(0, 230, 118, 0.8) !important;
+        background-color: #00e5ff !important;
+        border: 2px solid #00e676 !important;
+        box-shadow: 0 0 12px rgba(0, 229, 255, 0.9) !important;
     }
     div[data-testid="stSliderTickBarMin"], div[data-testid="stSliderTickBarMax"] {
         color: #94a3b8 !important;
     }
 
-    /* Onglets en forme de pilules lumineuses (comme sur la maquette) */
+    /* Onglets navigation */
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
-        background-color: rgba(13, 20, 33, 0.85);
+        background-color: rgba(11, 18, 32, 0.9);
         padding: 6px 10px;
         border-radius: 999px;
-        border: 1px solid rgba(0, 229, 255, 0.18);
+        border: 1px solid rgba(0, 229, 255, 0.22);
         margin-bottom: 18px;
     }
     .stTabs [data-baseweb="tab"] {
@@ -96,27 +163,39 @@ st.markdown("""
     }
     .stTabs [aria-selected="true"] {
         color: #ffffff !important;
-        background: linear-gradient(135deg, rgba(0, 230, 118, 0.25), rgba(0, 229, 255, 0.25)) !important;
-        border: 1px solid #00e676 !important;
-        box-shadow: 0 0 15px rgba(0, 230, 118, 0.25);
+        background: linear-gradient(135deg, rgba(0, 230, 118, 0.3), rgba(0, 229, 255, 0.3)) !important;
+        border: 1px solid #00e5ff !important;
+        box-shadow: 0 0 16px rgba(0, 229, 255, 0.3);
     }
     .stTabs [data-baseweb="tab-highlight"] {
         display: none !important;
     }
 
-    /* Cartes KPI personnalisées (sans les flèches parasites de st.metric) */
+    /* Cartes KPI */
     .kpi-card {
-        background: linear-gradient(145deg, rgba(16, 26, 43, 0.9), rgba(9, 14, 24, 0.95));
-        border: 1px solid rgba(0, 229, 255, 0.22);
+        background: linear-gradient(145deg, rgba(16, 26, 46, 0.92), rgba(9, 14, 26, 0.96));
+        border: 1px solid rgba(0, 229, 255, 0.26);
+        border-top: 2px solid #00e5ff;
         box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
         padding: 18px 22px;
         border-radius: 14px;
         height: 100%;
     }
+    .kpi-card-alt {
+        border-top: 2px solid #00e676;
+    }
+    .kpi-card-warn {
+        border-top: 2px solid #ffab00;
+    }
+    .kpi-card-risk {
+        border-top: 2px solid #ff5252;
+    }
     .kpi-title {
-        font-size: 0.82rem;
+        font-size: 0.8rem;
         color: #94a3b8;
-        font-weight: 500;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
         margin-bottom: 6px;
     }
     .kpi-value {
@@ -146,19 +225,20 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* Conteneur encadré néon (comme sur la maquette) */
+    /* Panneaux principaux */
     .glass-panel {
-        background: rgba(11, 17, 29, 0.82);
-        border: 1px solid rgba(0, 230, 118, 0.32);
+        background: linear-gradient(160deg, rgba(13, 21, 38, 0.88), rgba(8, 13, 24, 0.94));
+        border: 1px solid rgba(0, 229, 255, 0.28);
         border-radius: 16px;
         padding: 20px 22px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
         margin-bottom: 16px;
     }
 
     .hero-card {
-        background: linear-gradient(135deg, rgba(14, 24, 42, 0.92) 0%, rgba(9, 14, 24, 0.96) 100%);
-        border: 1px solid rgba(0, 229, 255, 0.3);
+        background: linear-gradient(135deg, rgba(15, 28, 52, 0.94) 0%, rgba(9, 15, 28, 0.98) 100%);
+        border: 1px solid rgba(0, 229, 255, 0.35);
+        border-left: 4px solid #00e676;
         border-radius: 16px;
         padding: 34px 38px;
         margin-bottom: 24px;
@@ -168,21 +248,19 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        background: rgba(0, 230, 118, 0.12);
-        border: 1px solid rgba(0, 230, 118, 0.45);
+        background: rgba(0, 230, 118, 0.14);
+        border: 1px solid rgba(0, 230, 118, 0.55);
         color: #00e676;
         padding: 6px 14px;
         border-radius: 999px;
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         font-weight: 600;
         font-family: 'JetBrains Mono', monospace;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# --- BASE DE SECOURS INSTITUTIONNELLE (ANTI-BLOCAGE YAHOO CLOUD / ZÉRO "None") ---
-# Si Streamlit Cloud se fait brider par Yahoo Finance sur .info, ces ratios fondamentaux
-# vérifiés prennent le relais instantanément et recalculent la capitalisation avec le cours en direct.
+# Donnees secours
 INSTITUTIONAL_FALLBACK_DB = {
     "NVDA":  {"name": "NVIDIA Corporation",      "shares_b": 24.30, "pe": 38.4, "f_pe": 27.5, "ev_ebitda": 32.1, "ps": 21.8, "pb": 36.5},
     "MSFT":  {"name": "Microsoft Corporation",   "shares_b": 7.43,  "pe": 31.2, "f_pe": 26.4, "ev_ebitda": 22.8, "ps": 12.4, "pb": 11.2},
@@ -199,8 +277,8 @@ INSTITUTIONAL_FALLBACK_DB = {
     "MS":    {"name": "Morgan Stanley",          "shares_b": 1.61,  "pe": 15.6, "f_pe": 13.8, "ev_ebitda": 11.8, "ps": 3.4,  "pb": 1.8},
     "BLK":   {"name": "BlackRock, Inc.",         "shares_b": 0.15,  "pe": 22.8, "f_pe": 19.5, "ev_ebitda": 16.9, "ps": 7.2,  "pb": 3.4},
     "V":     {"name": "Visa Inc.",               "shares_b": 1.95,  "pe": 29.4, "f_pe": 25.1, "ev_ebitda": 21.8, "ps": 15.8, "pb": 14.6},
-    "MC.PA": {"name": "LVMH Moët Hennessy",      "shares_b": 0.50,  "pe": 23.5, "f_pe": 21.0, "ev_ebitda": 14.2, "ps": 4.1,  "pb": 5.2},
-    "OR.PA": {"name": "L'Oréal S.A.",            "shares_b": 0.53,  "pe": 31.0, "f_pe": 27.8, "ev_ebitda": 20.5, "ps": 5.1,  "pb": 6.9},
+    "MC.PA": {"name": "LVMH Moet Hennessy",      "shares_b": 0.50,  "pe": 23.5, "f_pe": 21.0, "ev_ebitda": 14.2, "ps": 4.1,  "pb": 5.2},
+    "OR.PA": {"name": "L'Oreal S.A.",            "shares_b": 0.53,  "pe": 31.0, "f_pe": 27.8, "ev_ebitda": 20.5, "ps": 5.1,  "pb": 6.9},
     "AIR.PA":{"name": "Airbus SE",               "shares_b": 0.79,  "pe": 26.4, "f_pe": 20.2, "ev_ebitda": 13.8, "ps": 1.8,  "pb": 6.1},
     "TTE.PA":{"name": "TotalEnergies SE",        "shares_b": 2.28,  "pe": 8.4,  "f_pe": 7.9,  "ev_ebitda": 5.1,  "ps": 0.7,  "pb": 1.2},
     "BNP.PA":{"name": "BNP Paribas SA",          "shares_b": 1.13,  "pe": 7.6,  "f_pe": 6.9,  "ev_ebitda": 6.2,  "ps": 1.5,  "pb": 0.65},
@@ -210,6 +288,7 @@ INSTITUTIONAL_FALLBACK_DB = {
     "IWM":   {"name": "iShares Russell 2000 ETF","shares_b": 0.31,  "pe": 18.2, "f_pe": 16.4, "ev_ebitda": 12.8, "ps": 1.4,  "pb": 2.1},
 }
 
+# Mapping indices
 INDEX_PROXY_MAP = {
     "NQ=F": ("QQQ", "Invesco QQQ (Proxy Nasdaq 100)"),
     "^NDX": ("QQQ", "Invesco QQQ (Proxy Nasdaq 100)"),
@@ -222,7 +301,7 @@ INDEX_PROXY_MAP = {
 
 DEFAULT_UNIVERSE = list(INSTITUTIONAL_FALLBACK_DB.keys()) + ["NQ=F", "ES=F"]
 
-# --- EXTRACTION DES COURS AVEC PRÉ-MARCHÉ / POST-MARCHÉ (POUR AVOIR LE 4 NOVEMBRE DÈS LE MATIN) ---
+# Series temporelles
 @st.cache_data(ttl=180, show_spinner=False)
 def fetch_historical_series(ticker: str, years: int = 5):
     now = datetime.datetime.now()
@@ -246,9 +325,9 @@ def fetch_historical_series(ticker: str, years: int = 5):
             return pd.Series(dtype=float), None, "INDISPONIBLE"
 
         prices.index = pd.to_datetime(prices.index).tz_localize(None)
-        status_mode = "CLÔTURE OFFICIELLE"
+        status_mode = "CLOTURE OFFICIELLE"
         
-        # Activer prepost=True permet de capter le pré-marché US du 4 novembre dès 10h00 heure de Paris !
+        # Flux intraday
         try:
             intraday = t_obj.history(period="5d", interval="5m", prepost=True)
             if not intraday.empty and 'Close' in intraday.columns:
@@ -259,11 +338,11 @@ def fetch_historical_series(ticker: str, years: int = 5):
                 if last_intra_ts.date() > last_daily_date:
                     new_point = pd.Series([last_intra_val], index=[pd.Timestamp(last_intra_ts.date())])
                     prices = pd.concat([prices, new_point])
-                    status_mode = "LIVE / PRÉ-MARCHÉ"
+                    status_mode = "TEMPS REEL / PRE-MARCHE"
                 elif last_intra_ts.date() == last_daily_date:
                     prices.iloc[-1] = last_intra_val
                     if last_intra_ts.date() == now.date():
-                        status_mode = "LIVE / INTRADAY"
+                        status_mode = "TEMPS REEL / INTRADAY"
         except Exception:
             pass
 
@@ -272,7 +351,7 @@ def fetch_historical_series(ticker: str, years: int = 5):
     except Exception:
         return pd.Series(dtype=float), None, "INDISPONIBLE"
 
-# --- EXTRACTION HYBRIDE DES MULTIPLES (GARANTIE ZÉRO "None") ---
+# Extraction fondamentaux
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_fundamentals_bulletproof(tickers: tuple):
     rows = []
@@ -280,7 +359,7 @@ def fetch_fundamentals_bulletproof(tickers: tuple):
         eff_t = INDEX_PROXY_MAP[t][0] if t in INDEX_PROXY_MAP else t
         fb = INSTITUTIONAL_FALLBACK_DB.get(eff_t, {})
         
-        # 1. Récupération du dernier prix réel via l'historique (qui n'est jamais bloqué par Yahoo)
+        # Prix historique
         s_hist, _, _ = fetch_historical_series(eff_t, years=1)
         live_price = float(s_hist.iloc[-1]) if not s_hist.empty else np.nan
         
@@ -292,7 +371,7 @@ def fetch_fundamentals_bulletproof(tickers: tuple):
         ps = fb.get("ps", np.nan)
         pb = fb.get("pb", np.nan)
 
-        # 2. Tentative d'enrichissement par Yahoo .info si le serveur Cloud n'est pas limité
+        # Enrichissement API
         try:
             info = yf.Ticker(eff_t).info
             if info and isinstance(info, dict):
@@ -312,7 +391,7 @@ def fetch_fundamentals_bulletproof(tickers: tuple):
         except Exception:
             pass
 
-        # 3. Si c'est un ticker inconnu non présent dans la base et que .info a échoué, estimation via fast_info
+        # Secours capitalisation
         if pd.isnull(mcap_b):
             try:
                 fi = yf.Ticker(eff_t).fast_info
@@ -334,6 +413,7 @@ def fetch_fundamentals_bulletproof(tickers: tuple):
         })
     return pd.DataFrame(rows)
 
+# Recherche actifs
 @st.cache_data(ttl=900, show_spinner=False)
 def search_securities(query: str):
     if not query or len(query.strip()) < 2:
@@ -352,9 +432,7 @@ def search_securities(query: str):
         return []
 
 
-# =====================================================================
-# ÉCRAN 1 : PAGE D'ACCUEIL
-# =====================================================================
+# Page accueil
 if st.session_state.page == "home":
     now_str = datetime.datetime.now().strftime("%d %b %Y — %H:%M")
     st.markdown(f"""
@@ -363,14 +441,14 @@ if st.session_state.page == "home":
             <span style="color: #00e5ff; font-family: 'JetBrains Mono'; font-size: 0.82rem; letter-spacing: 0.12em;">
                 PLATEFORME QUANTITATIVE INSTITUTIONNELLE
             </span>
-            <span class="live-badge">● SYNCHRONISATION : {now_str}</span>
+            <span class="live-badge">SYNCHRONISATION : {now_str}</span>
         </div>
         <h1 style="font-size: 2.4rem; font-weight: 800; color: #ffffff; margin: 14px 0 10px 0;">
             QuantValuation & Stochastic Risk Terminal
         </h1>
         <p style="font-size: 1.02rem; color: #94a3b8; max-width: 820px; line-height: 1.6;">
-            Analyse fondamentale multi-ratios (P/E Trailing vs Forward P/E), cônes de probabilité Monte Carlo 
-            et mesure du risque extrême (VaR Cornish-Fisher) connectés aux flux de marché en direct.
+            Analyse fondamentale multi-ratios (P/E Trailing vs Forward P/E), cones de probabilite Monte Carlo 
+            et mesure du risque extreme (VaR Cornish-Fisher) connectes aux flux de marche en direct.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -378,60 +456,73 @@ if st.session_state.page == "home":
     col_l, col_r = st.columns([3, 2])
     with col_l:
         st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
-        st.markdown("#### 🚀 Lancer une analyse d'actif")
+        st.markdown("#### Lancer une analyse d'actif")
         home_query = st.text_input("Symbole ou nom d'entreprise :", value=st.session_state.selected_ticker)
         res = search_securities(home_query)
         if res:
-            sel = st.selectbox("Résultats :", options=res, format_func=lambda x: x[1])
+            sel = st.selectbox("Resultats :", options=res, format_func=lambda x: x[1])
             target_sym = sel[0]
         else:
             target_sym = home_query.upper().strip() or "NVDA"
             
-        if st.button("Ouvrir le Terminal Quantitatif →", type="primary", use_container_width=True):
+        if st.button("Ouvrir le Terminal Quantitatif", type="primary", use_container_width=True):
             go_to_terminal(ticker=target_sym)
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_r:
         st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
-        st.markdown("#### ⚡ Univers Sectoriels Préconfigurés")
-        if st.button("🤖 Big Tech & IA (NVDA, MSFT, GOOGL, AMZN, AAPL, META)", use_container_width=True):
+        st.markdown("#### Univers Sectoriels Preconfigures")
+        if st.button("Big Tech & IA (NVDA, MSFT, GOOGL, AMZN, AAPL, META)", use_container_width=True):
             go_to_terminal("NVDA", ["MSFT", "GOOGL", "AMZN", "AAPL", "META"])
             st.rerun()
-        if st.button("📈 Contrats Futures & Indices US (NQ=F, QQQ, SPY, DIA, IWM)", use_container_width=True):
+        if st.button("Contrats Futures & Indices US (NQ=F, QQQ, SPY, DIA, IWM)", use_container_width=True):
             go_to_terminal("NQ=F", ["QQQ", "SPY", "DIA", "IWM"])
             st.rerun()
-        if st.button("🏦 Banques Wall Street (JPM, GS, MS, BLK, V)", use_container_width=True):
+        if st.button("Banques Wall Street (JPM, GS, MS, BLK, V)", use_container_width=True):
             go_to_terminal("JPM", ["GS", "MS", "BLK", "V"])
             st.rerun()
-        if st.button("🇫🇷 Leaders CAC 40 (MC.PA, OR.PA, AIR.PA, TTE.PA, BNP.PA)", use_container_width=True):
+        if st.button("Leaders CAC 40 (MC.PA, OR.PA, AIR.PA, TTE.PA, BNP.PA)", use_container_width=True):
             go_to_terminal("MC.PA", ["OR.PA", "AIR.PA", "TTE.PA", "BNP.PA"])
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
 
-# =====================================================================
-# ÉCRAN 2 : TERMINAL QUANTITATIF (DESIGN IDENTIQUE À LA MAQUETTE)
-# =====================================================================
+# Terminal quantitatif
 else:
-    if st.sidebar.button("⬅ Page d'Accueil", use_container_width=True):
-        go_to_home()
-        st.rerun()
-        
-    if st.sidebar.button("🔄 Actualiser le flux temps réel", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
+    # En-tete barre laterale
+    st.sidebar.markdown("""
+    <div class="sidebar-brand">
+        <div style="font-family:'JetBrains Mono'; font-size:0.75rem; color:#00e5ff; letter-spacing:0.15em; font-weight:700;">
+            QUANT TERMINAL v2.5
+        </div>
+        <div style="font-size:0.72rem; color:#94a3b8; margin-top:2px;">
+            CONSOLE DE PARAMETRAGE
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.sidebar.markdown("### PARAMÈTRES")
+    col_sb1, col_sb2 = st.sidebar.columns(2)
+    with col_sb1:
+        if st.button("Accueil", use_container_width=True):
+            go_to_home()
+            st.rerun()
+    with col_sb2:
+        if st.button("Actualiser", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+
+    # Section actif
+    st.sidebar.markdown('<div class="sidebar-section">01 / Univers & Actifs</div>', unsafe_allow_html=True)
     search_term = st.sidebar.text_input(
-        "Recherche d'actif (ex: NVDA, NQ=F, AAPL)",
+        "Recherche d'actif (NVDA, NQ=F, AAPL)",
         value=st.session_state.selected_ticker
     )
     search_results = search_securities(search_term)
 
     if search_results:
         selected_tuple = st.sidebar.selectbox(
-            "Résultats disponibles :",
+            "Resultats disponibles :",
             options=search_results,
             format_func=lambda x: x[1]
         )
@@ -445,35 +536,38 @@ else:
     default_peers = [p for p in st.session_state.selected_peers if p != primary_ticker]
     
     peer_list = st.sidebar.multiselect(
-        "Actifs comparables (Tags interactifs) :",
+        "Actifs comparables :",
         options=[x for x in available_options if x != primary_ticker],
         default=default_peers[:5]
     )
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### MODÉLISATION STOCHASTIQUE")
+    # Section stochastique
+    st.sidebar.markdown('<div class="sidebar-section">02 / Modele Stochastique</div>', unsafe_allow_html=True)
     stoch_model = st.sidebar.selectbox(
-        "Loi des chocs aléatoires",
-        ["GBM Classique (Loi Normale)", "Queues Épaisses (t-Student, df=5)"]
+        "Loi de distribution",
+        ["GBM Classique (Loi Normale)", "Queues Epaisses (t-Student, df=5)"]
     )
     n_simulations = st.sidebar.slider("Trajectoires Monte Carlo", 500, 10000, 2500, 500)
-    forecast_days = st.sidebar.slider("Horizon de prévision (jours ouvrés)", 21, 504, 252, 21)
-    history_years = st.sidebar.selectbox("Profondeur historique (années)", [1, 3, 5, 10], index=2)
-    macro_ticker = st.sidebar.text_input("Benchmark Macro", value="^GSPC")
+    forecast_days = st.sidebar.slider("Horizon (jours ouvres)", 21, 504, 252, 21)
+    history_years = st.sidebar.selectbox("Profondeur historique (ans)", [1, 3, 5, 10], index=2)
 
-    # --- EXTRACTION DES DONNÉES ---
+    # Section macro
+    st.sidebar.markdown('<div class="sidebar-section">03 / Facteur Macro</div>', unsafe_allow_html=True)
+    macro_ticker = st.sidebar.text_input("Indice de reference", value="^GSPC")
+
+    # Chargement donnees
     hist_prices, last_quote_dt, status_mode = fetch_historical_series(primary_ticker, years=history_years)
     all_tickers = tuple([primary_ticker] + [p for p in peer_list if p != primary_ticker])
     df_metrics = fetch_fundamentals_bulletproof(all_tickers)
 
     if last_quote_dt is not None:
         date_str = last_quote_dt.strftime("%d/%m/%Y")
-        badge_text = f"● DERNIÈRE COTATION : {date_str} ({status_mode})"
+        badge_text = f"DERNIERE COTATION : {date_str} ({status_mode})"
     else:
         date_str = "N/A"
-        badge_text = "● FLUX HORS LIGNE"
+        badge_text = "FLUX HORS LIGNE"
 
-    # --- EN-TÊTE ---
+    # En-tete principal
     st.markdown(f"""
     <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
         <div>
@@ -488,7 +582,7 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-    # --- CALCULS GLOBAUX POUR LES 4 CARTES KPI ET MONTE CARLO ---
+    # Calculs globaux
     if len(hist_prices) > 30:
         s0 = float(hist_prices.iloc[-1])
         s_prev = float(hist_prices.iloc[-2])
@@ -509,9 +603,9 @@ else:
         pe_median = df_metrics['P/E (Trailing)'].median()
         total_mcap_t = df_metrics['Capitalisation ($B)'].sum() / 1000.0
 
-        # --- 4 CARTES KPI EN HTML PUR (FINI LES "N/A" ET LES FLÈCHES VERTES PARASITES) ---
+        # Bandeau KPI
         chg_class = "kpi-sub-pos" if daily_chg >= 0 else "kpi-sub-neg"
-        chg_arrow = "▲" if daily_chg >= 0 else "▼"
+        chg_sign = "+" if daily_chg >= 0 else ""
         
         k1, k2, k3, k4 = st.columns(4)
         with k1:
@@ -520,36 +614,36 @@ else:
                 <div class="kpi-title">Cours Actuel ({date_str})</div>
                 <div class="kpi-value">
                     ${s0:,.2f}
-                    <span class="{chg_class}">{chg_arrow} {daily_chg:+.2f}%</span>
+                    <span class="{chg_class}">{chg_sign}{daily_chg:.2f}%</span>
                 </div>
                 <div class="kpi-sub-neutral">Capitalisation groupe : ${total_mcap_t:.2f}T</div>
             </div>
             """, unsafe_allow_html=True)
         with k2:
             st.markdown(f"""
-            <div class="kpi-card">
-                <div class="kpi-title">P/E Médian Sectoriel</div>
+            <div class="kpi-card kpi-card-alt">
+                <div class="kpi-title">P/E Median Sectoriel</div>
                 <div class="kpi-value">{pe_median:.1f}x</div>
-                <div class="kpi-sub-neutral">Sur {len(all_tickers)} actifs comparés</div>
+                <div class="kpi-sub-neutral">Sur {len(all_tickers)} actifs compares</div>
             </div>
             """, unsafe_allow_html=True)
         with k3:
             st.markdown(f"""
-            <div class="kpi-card">
-                <div class="kpi-title">Volatilité Annualisée (σ)</div>
+            <div class="kpi-card kpi-card-warn">
+                <div class="kpi-title">Volatilite Annualisee</div>
                 <div class="kpi-value">{sigma_ann * 100:.1f}%</div>
                 <div class="kpi-sub-neutral">Profondeur : {history_years} ans</div>
             </div>
             """, unsafe_allow_html=True)
         with k4:
             st.markdown(f"""
-            <div class="kpi-card">
+            <div class="kpi-card kpi-card-risk">
                 <div class="kpi-title">VaR 95% (Cornish-Fisher 1j)</div>
                 <div class="kpi-value">
                     -{var95_pct:.2f}%
                     <span class="kpi-sub-neg">-${s0 * (var95_pct/100):,.2f}</span>
                 </div>
-                <div class="kpi-sub-neutral">Ajustée Skewness & Kurtosis</div>
+                <div class="kpi-sub-neutral">Ajustee Skewness & Kurtosis</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -559,12 +653,10 @@ else:
         "1. Multiples & Valorisation",
         "2. Mouvement Brownien & Monte Carlo",
         "3. Gestion des Risques (VaR & CVaR)",
-        "4. Analyse Factorielle & Corrélations"
+        "4. Analyse Factorielle & Correlations"
     ])
 
-    # -----------------------------------------------------------------
-    # FONCTION UTILITAIRE POUR GÉNÉRER LE GRAPHIQUE MONTE CARLO (FAN CHART)
-    # -----------------------------------------------------------------
+    # Generateur Monte Carlo
     def build_monte_carlo_figure(height=420):
         if "t-Student" in stoch_model:
             df_t = 5
@@ -585,7 +677,7 @@ else:
         p95_path = np.percentile(price_trajectories, 95, axis=1)
 
         fig = go.Figure()
-        # Cône 5% - 95%
+        # Intervalle 5-95
         fig.add_trace(go.Scatter(
             x=future_dates, y=p95_path, mode='lines',
             line=dict(color='rgba(0, 229, 255, 0.5)', width=1.2, dash='dot'), name='95e Centile'
@@ -593,9 +685,9 @@ else:
         fig.add_trace(go.Scatter(
             x=future_dates, y=p5_path, mode='lines',
             fill='tonexty', fillcolor='rgba(0, 229, 255, 0.09)',
-            line=dict(color='rgba(0, 229, 255, 0.35)', width=1.2, dash='dot'), name='Cône 5% - 95%'
+            line=dict(color='rgba(0, 229, 255, 0.35)', width=1.2, dash='dot'), name='Cone 5% - 95%'
         ))
-        # Cône 25% - 75%
+        # Intervalle 25-75
         fig.add_trace(go.Scatter(
             x=future_dates, y=p75_path, mode='lines',
             line=dict(color='rgba(0, 230, 118, 0.55)', width=1.2), name='75e Centile'
@@ -603,19 +695,19 @@ else:
         fig.add_trace(go.Scatter(
             x=future_dates, y=p25_path, mode='lines',
             fill='tonexty', fillcolor='rgba(0, 230, 118, 0.18)',
-            line=dict(color='rgba(0, 230, 118, 0.55)', width=1.2), name='Cône 25% - 75%'
+            line=dict(color='rgba(0, 230, 118, 0.55)', width=1.2), name='Cone 25% - 75%'
         ))
-        # Faisceau de trajectoires individuelles
+        # Echantillon trajectoires
         for j in range(min(n_simulations, 45)):
             fig.add_trace(go.Scatter(
                 x=future_dates, y=price_trajectories[:, j], mode='lines',
                 line=dict(color='rgba(0, 229, 255, 0.12)', width=0.8),
                 showlegend=False, hoverinfo='skip'
             ))
-        # Médiane
+        # Mediane
         fig.add_trace(go.Scatter(
             x=future_dates, y=p50_path, mode='lines',
-            line=dict(color='#00e676', width=2.8), name='Médiane (50%)'
+            line=dict(color='#00e676', width=2.8), name='Mediane (50%)'
         ))
         fig.update_layout(
             height=height,
@@ -629,10 +721,7 @@ else:
         )
         return fig, price_trajectories, future_dates
 
-    # -----------------------------------------------------------------
-    # ONGLET 1 : DISPOSITION IDENTIQUE À L'IMAGE GÉNÉRÉE
-    # (Gauche : Tableau + Bar Chart P/E Trailing vs Forward | Droite : Cône Monte Carlo)
-    # -----------------------------------------------------------------
+    # Onglet 1 : Multiples
     with tabs[0]:
         col_left, col_right = st.columns([1.1, 1])
 
@@ -640,7 +729,6 @@ else:
             st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
             st.markdown("#### Valorisation Relative Sectorielle")
             
-            # Tableau formaté proprement sans aucun "None"
             st.dataframe(
                 df_metrics[['Ticker', 'Nom', 'Capitalisation ($B)', 'P/E (Trailing)', 'Forward P/E', 'EV/EBITDA']].set_index('Ticker'),
                 column_config={
@@ -654,12 +742,12 @@ else:
             )
 
             ratio_choice = st.selectbox(
-                "Multiple de valorisation à analyser :",
-                ["P/E (Trailing) vs Forward P/E (Groupé)", "P/E (Trailing)", "Forward P/E", "EV/EBITDA", "P/S", "P/B"]
+                "Multiple de valorisation a analyser :",
+                ["P/E (Trailing) vs Forward P/E (Groupe)", "P/E (Trailing)", "Forward P/E", "EV/EBITDA", "P/S", "P/B"]
             )
 
             fig_bar = go.Figure()
-            if "Groupé" in ratio_choice:
+            if "Groupe" in ratio_choice:
                 med_pe = df_metrics['P/E (Trailing)'].median()
                 fig_bar.add_trace(go.Bar(
                     x=df_metrics['Ticker'],
@@ -680,7 +768,7 @@ else:
                 fig_bar.add_hline(
                     y=med_pe,
                     line=dict(color="#ffab00", dash="dash", width=1.8),
-                    annotation_text=f"Médiane : {med_pe:.1f}x",
+                    annotation_text=f"Mediane : {med_pe:.1f}x",
                     annotation_position="top right"
                 )
             else:
@@ -696,7 +784,7 @@ else:
                 fig_bar.add_hline(
                     y=med_val,
                     line=dict(color="#ffab00", dash="dash", width=1.8),
-                    annotation_text=f"Médiane : {med_val:.1f}x",
+                    annotation_text=f"Mediane : {med_val:.1f}x",
                     annotation_position="top right"
                 )
 
@@ -722,33 +810,33 @@ else:
                 st.plotly_chart(fig_mc_preview, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # -----------------------------------------------------------------
-    # ONGLET 2 : ANALYSE DÉTAILLÉE MONTE CARLO & DISTRIBUTION TERMINALE
-    # -----------------------------------------------------------------
+    # Onglet 2 : Monte Carlo
     with tabs[1]:
         if len(hist_prices) > 30:
             fig_mc_full, price_trajectories, future_dates = build_monte_carlo_figure(height=440)
             final_prices = price_trajectories[-1, :]
             p50_end = float(np.median(final_prices))
-            prob_bull = float(np.mean(final_prices > s0) * 100)
 
             c1, c2 = st.columns([3, 1.8])
             with c1:
-                st.markdown("#### Cône de Projection Stochastique")
+                st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
+                st.markdown("#### Cone de Projection Stochastique")
                 st.plotly_chart(fig_mc_full, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
             with c2:
+                st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
                 st.markdown(f"#### Distribution au {future_dates[-1].strftime('%d/%m/%Y')}")
                 fig_hist = go.Figure()
                 fig_hist.add_trace(go.Histogram(
                     x=final_prices[final_prices >= s0], nbinsx=35,
-                    marker_color='#00e676', opacity=0.75, name="Haussier (> S₀)"
+                    marker_color='#00e676', opacity=0.75, name="Haussier (> S0)"
                 ))
                 fig_hist.add_trace(go.Histogram(
                     x=final_prices[final_prices < s0], nbinsx=35,
-                    marker_color='#ff5252', opacity=0.75, name="Baissier (< S₀)"
+                    marker_color='#ff5252', opacity=0.75, name="Baissier (< S0)"
                 ))
-                fig_hist.add_vline(x=s0, line_color="#ffffff", line_dash="dash", annotation_text="S₀")
-                fig_hist.add_vline(x=p50_end, line_color="#00e5ff", line_width=2, annotation_text=f"Médiane (${p50_end:.0f})")
+                fig_hist.add_vline(x=s0, line_color="#ffffff", line_dash="dash", annotation_text="S0")
+                fig_hist.add_vline(x=p50_end, line_color="#00e5ff", line_width=2, annotation_text=f"Mediane (${p50_end:.0f})")
                 fig_hist.update_layout(
                     height=440,
                     barmode='overlay',
@@ -756,19 +844,19 @@ else:
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(11,17,29,0.5)",
                     xaxis_title="Prix Final ($)",
-                    yaxis_title="Fréquence",
+                    yaxis_title="Frequence",
                     margin=dict(l=10, r=10, t=20, b=10),
                     showlegend=False
                 )
                 st.plotly_chart(fig_hist, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
-    # -----------------------------------------------------------------
-    # ONGLET 3 : VALUE-AT-RISK & CVaR
-    # -----------------------------------------------------------------
+    # Onglet 3 : Risques
     with tabs[2]:
         if len(hist_prices) > 30:
+            st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
             returns = log_ret.values
-            confidence_level = st.slider("Niveau de confiance statistique (1 - α)", 0.90, 0.99, 0.95, 0.01)
+            confidence_level = st.slider("Niveau de confiance statistique (1 - alpha)", 0.90, 0.99, 0.95, 0.01)
             alpha = 1.0 - confidence_level
             
             z_norm = norm.ppf(alpha)
@@ -795,10 +883,9 @@ else:
                 margin=dict(l=10, r=10, t=20, b=10)
             )
             st.plotly_chart(fig_var, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-    # -----------------------------------------------------------------
-    # ONGLET 4 : CORRÉLATION & BÊTA
-    # -----------------------------------------------------------------
+    # Onglet 4 : Correlations
     with tabs[3]:
         s_bench, _, _ = fetch_historical_series(macro_ticker, years=history_years)
         df_pair = pd.DataFrame({primary_ticker: hist_prices, macro_ticker: s_bench}).dropna()
@@ -810,6 +897,7 @@ else:
             
             c_cor1, c_cor2 = st.columns(2)
             with c_cor1:
+                st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
                 fig_corr = go.Figure()
                 fig_corr.add_trace(go.Scatter(
                     x=df_rebased.index, y=df_rebased[primary_ticker],
@@ -824,27 +912,30 @@ else:
                     template="plotly_dark",
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(11,17,29,0.5)",
-                    title="Performance Comparée (Base 100)",
+                    title="Performance Comparee (Base 100)",
                     margin=dict(l=10, r=10, t=40, b=10)
                 )
                 st.plotly_chart(fig_corr, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
                 
             with c_cor2:
+                st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
                 fig_roll = go.Figure()
                 fig_roll.add_trace(go.Scatter(
                     x=rolling_corr.index, y=rolling_corr,
                     mode='lines', fill='tozeroy',
                     fillcolor='rgba(0, 230, 118, 0.14)',
                     line=dict(color='#00e676', width=1.8),
-                    name="Corrélation Glissante 60j"
+                    name="Correlation Glissante 60j"
                 ))
                 fig_roll.update_layout(
                     height=400,
                     template="plotly_dark",
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(11,17,29,0.5)",
-                    title="Corrélation Glissante 60 Jours",
+                    title="Correlation Glissante 60 Jours",
                     yaxis=dict(range=[-1, 1]),
                     margin=dict(l=10, r=10, t=40, b=10)
                 )
                 st.plotly_chart(fig_roll, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
