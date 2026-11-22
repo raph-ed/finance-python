@@ -8,934 +8,334 @@ import datetime
 
 # Configuration page
 st.set_page_config(
-    page_title="QuantTerminal Pro | Valuation & Stochastic Suite",
+    page_title="Quant Terminal",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# Etat session
-if "page" not in st.session_state:
-    st.session_state.page = "home"
-if "selected_ticker" not in st.session_state:
-    st.session_state.selected_ticker = "NVDA"
-if "selected_peers" not in st.session_state:
-    st.session_state.selected_peers = ["MSFT", "GOOGL", "AMZN", "AAPL", "META"]
-
-def go_to_terminal(ticker=None, peers=None):
-    if ticker:
-        st.session_state.selected_ticker = ticker
-    if peers:
-        st.session_state.selected_peers = peers
-    st.session_state.page = "terminal"
-
-def go_to_home():
-    st.session_state.page = "home"
-
-# Styles CSS
+# Theme sobre
 st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
-    
-    :root {
-        --primary-color: #00e5ff !important;
-    }
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    
-    .stApp {
-        background: radial-gradient(circle at 20% 10%, #0e1e38 0%, #080d1a 45%, #05070e 100%);
-        color: #e2e8f0;
-    }
-    
-    /* Barre laterale */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0b1324 0%, #070b14 55%, #050811 100%) !important;
-        border-right: 1px solid rgba(0, 229, 255, 0.25);
-        box-shadow: 6px 0 28px rgba(0, 0, 0, 0.6);
-    }
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap');
 
-    .sidebar-brand {
-        background: linear-gradient(135deg, rgba(0, 229, 255, 0.14), rgba(0, 230, 118, 0.08));
-        border: 1px solid rgba(0, 229, 255, 0.35);
-        border-radius: 10px;
-        padding: 12px 14px;
-        margin-bottom: 16px;
-        text-align: center;
-    }
-
-    .sidebar-section {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.74rem;
-        font-weight: 700;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: #00e5ff;
-        padding: 8px 12px;
-        margin: 18px 0 10px 0;
-        background: linear-gradient(90deg, rgba(0, 229, 255, 0.16) 0%, rgba(124, 77, 255, 0.06) 100%);
-        border-left: 3px solid #00e676;
-        border-radius: 0 6px 6px 0;
-    }
-
-    /* Champs saisie barre laterale */
-    section[data-testid="stSidebar"] div[data-baseweb="input"] > div,
-    section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
-        background-color: rgba(14, 23, 42, 0.9) !important;
-        border: 1px solid rgba(0, 229, 255, 0.28) !important;
-        border-radius: 8px !important;
-        color: #f8fafc !important;
-        transition: all 0.2s ease;
-    }
-
-    section[data-testid="stSidebar"] div[data-baseweb="input"] > div:focus-within,
-    section[data-testid="stSidebar"] div[data-baseweb="select"] > div:focus-within {
-        border-color: #00e676 !important;
-        box-shadow: 0 0 12px rgba(0, 230, 118, 0.3) !important;
-    }
-
-    section[data-testid="stSidebar"] label {
-        color: #cbd5e1 !important;
-        font-size: 0.82rem !important;
-        font-weight: 500 !important;
-    }
-
-    /* Boutons */
-    .stButton > button {
-        background: linear-gradient(135deg, rgba(0, 229, 255, 0.16) 0%, rgba(0, 230, 118, 0.12) 100%) !important;
-        border: 1px solid rgba(0, 229, 255, 0.4) !important;
-        color: #f1f5f9 !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        font-size: 0.84rem !important;
-        padding: 0.5rem 0.9rem !important;
-        transition: all 0.2s ease !important;
-    }
-
-    .stButton > button:hover {
-        border-color: #00e676 !important;
-        background: linear-gradient(135deg, rgba(0, 230, 118, 0.28) 0%, rgba(0, 229, 255, 0.24) 100%) !important;
-        box-shadow: 0 0 16px rgba(0, 229, 255, 0.3) !important;
-        color: #ffffff !important;
-    }
-
-    /* Tags multiselect */
-    span[data-baseweb="tag"] {
-        background: linear-gradient(135deg, rgba(0, 230, 118, 0.22), rgba(0, 229, 255, 0.22)) !important;
-        border: 1px solid #00e676 !important;
-        color: #00e676 !important;
-        border-radius: 6px !important;
-        font-weight: 600 !important;
-    }
-    span[data-baseweb="tag"] span {
-        color: #e2f8ee !important;
-    }
-
-    /* Curseurs */
-    div[data-baseweb="slider"] div[role="slider"] {
-        background-color: #00e5ff !important;
-        border: 2px solid #00e676 !important;
-        box-shadow: 0 0 12px rgba(0, 229, 255, 0.9) !important;
-    }
-    div[data-testid="stSliderTickBarMin"], div[data-testid="stSliderTickBarMax"] {
-        color: #94a3b8 !important;
-    }
-
-    /* Onglets navigation */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-        background-color: rgba(11, 18, 32, 0.9);
-        padding: 6px 10px;
-        border-radius: 999px;
-        border: 1px solid rgba(0, 229, 255, 0.22);
-        margin-bottom: 18px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 38px;
-        border-radius: 999px !important;
-        color: #94a3b8;
-        background-color: transparent;
-        border: none !important;
-        font-weight: 600;
-        font-size: 0.88rem;
-        padding: 0 20px;
-    }
-    .stTabs [aria-selected="true"] {
-        color: #ffffff !important;
-        background: linear-gradient(135deg, rgba(0, 230, 118, 0.3), rgba(0, 229, 255, 0.3)) !important;
-        border: 1px solid #00e5ff !important;
-        box-shadow: 0 0 16px rgba(0, 229, 255, 0.3);
-    }
-    .stTabs [data-baseweb="tab-highlight"] {
-        display: none !important;
-    }
-
-    /* Cartes KPI */
-    .kpi-card {
-        background: linear-gradient(145deg, rgba(16, 26, 46, 0.92), rgba(9, 14, 26, 0.96));
-        border: 1px solid rgba(0, 229, 255, 0.26);
-        border-top: 2px solid #00e5ff;
-        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
-        padding: 18px 22px;
-        border-radius: 14px;
-        height: 100%;
-    }
-    .kpi-card-alt {
-        border-top: 2px solid #00e676;
-    }
-    .kpi-card-warn {
-        border-top: 2px solid #ffab00;
-    }
-    .kpi-card-risk {
-        border-top: 2px solid #ff5252;
-    }
-    .kpi-title {
-        font-size: 0.8rem;
-        color: #94a3b8;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 6px;
-    }
-    .kpi-value {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 1.75rem;
-        font-weight: 700;
-        color: #ffffff;
-        display: flex;
-        align-items: baseline;
-        gap: 10px;
-    }
-    .kpi-sub-pos {
-        font-size: 0.82rem;
-        color: #00e676;
-        font-weight: 600;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    .kpi-sub-neg {
-        font-size: 0.82rem;
-        color: #ff5252;
-        font-weight: 600;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    .kpi-sub-neutral {
-        font-size: 0.8rem;
-        color: #64748b;
-        margin-top: 4px;
-    }
-
-    /* Panneaux principaux */
-    .glass-panel {
-        background: linear-gradient(160deg, rgba(13, 21, 38, 0.88), rgba(8, 13, 24, 0.94));
-        border: 1px solid rgba(0, 229, 255, 0.28);
-        border-radius: 16px;
-        padding: 20px 22px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-        margin-bottom: 16px;
-    }
-
-    .hero-card {
-        background: linear-gradient(135deg, rgba(15, 28, 52, 0.94) 0%, rgba(9, 15, 28, 0.98) 100%);
-        border: 1px solid rgba(0, 229, 255, 0.35);
-        border-left: 4px solid #00e676;
-        border-radius: 16px;
-        padding: 34px 38px;
-        margin-bottom: 24px;
-    }
-
-    .live-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: rgba(0, 230, 118, 0.14);
-        border: 1px solid rgba(0, 230, 118, 0.55);
-        color: #00e676;
-        padding: 6px 14px;
-        border-radius: 999px;
-        font-size: 0.76rem;
-        font-weight: 600;
-        font-family: 'JetBrains Mono', monospace;
-    }
-    </style>
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, sans-serif;
+}
+.stApp {
+    background-color: #0b0e11;
+    color: #d1d5db;
+}
+section[data-testid="stSidebar"] {
+    background-color: #11151c;
+    border-right: 1px solid #1f2630;
+}
+div[data-testid="stMetricValue"] {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 1.35rem;
+    font-weight: 600;
+}
+div[data-testid="metric-container"] {
+    background-color: #11151c;
+    border: 1px solid #1f2630;
+    padding: 12px 16px;
+    border-radius: 3px;
+}
+.stTabs [data-baseweb="tab-list"] {
+    gap: 4px;
+    border-bottom: 1px solid #1f2630;
+}
+.stTabs [data-baseweb="tab"] {
+    height: 38px;
+    color: #8b949e;
+    background: transparent;
+    border: none;
+    font-size: 0.88rem;
+}
+.stTabs [aria-selected="true"] {
+    color: #f3f4f6 !important;
+    background-color: #161b22 !important;
+    border-bottom: 2px solid #f59e0b !important;
+}
+.ticker-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #1f2630;
+    margin-bottom: 18px;
+}
+</style>
 """, unsafe_allow_html=True)
 
-# Donnees secours
-INSTITUTIONAL_FALLBACK_DB = {
-    "NVDA":  {"name": "NVIDIA Corporation",      "shares_b": 24.30, "pe": 38.4, "f_pe": 27.5, "ev_ebitda": 32.1, "ps": 21.8, "pb": 36.5},
-    "MSFT":  {"name": "Microsoft Corporation",   "shares_b": 7.43,  "pe": 31.2, "f_pe": 26.4, "ev_ebitda": 22.8, "ps": 12.4, "pb": 11.2},
-    "GOOGL": {"name": "Alphabet Inc.",           "shares_b": 12.25, "pe": 22.4, "f_pe": 19.1, "ev_ebitda": 15.6, "ps": 6.4,  "pb": 6.8},
-    "AMZN":  {"name": "Amazon.com, Inc.",        "shares_b": 10.50, "pe": 36.8, "f_pe": 28.2, "ev_ebitda": 18.4, "ps": 3.6,  "pb": 8.1},
-    "AAPL":  {"name": "Apple Inc.",              "shares_b": 15.12, "pe": 30.5, "f_pe": 26.8, "ev_ebitda": 23.4, "ps": 8.9,  "pb": 44.2},
-    "META":  {"name": "Meta Platforms, Inc.",    "shares_b": 2.53,  "pe": 25.4, "f_pe": 21.6, "ev_ebitda": 16.2, "ps": 9.1,  "pb": 8.9},
-    "TSLA":  {"name": "Tesla, Inc.",             "shares_b": 3.19,  "pe": 68.5, "f_pe": 52.0, "ev_ebitda": 41.2, "ps": 8.4,  "pb": 12.3},
-    "AMD":   {"name": "Advanced Micro Devices",  "shares_b": 1.62,  "pe": 42.1, "f_pe": 24.8, "ev_ebitda": 26.5, "ps": 9.8,  "pb": 4.5},
-    "AVGO":  {"name": "Broadcom Inc.",           "shares_b": 4.67,  "pe": 39.2, "f_pe": 28.1, "ev_ebitda": 25.4, "ps": 15.6, "pb": 11.8},
-    "ORCL":  {"name": "Oracle Corporation",      "shares_b": 2.77,  "pe": 34.0, "f_pe": 24.5, "ev_ebitda": 20.1, "ps": 8.5,  "pb": 38.0},
-    "JPM":   {"name": "JPMorgan Chase & Co.",    "shares_b": 2.82,  "pe": 13.2, "f_pe": 12.5, "ev_ebitda": 10.4, "ps": 4.1,  "pb": 1.9},
-    "GS":    {"name": "Goldman Sachs Group",     "shares_b": 0.31,  "pe": 14.8, "f_pe": 12.9, "ev_ebitda": 11.2, "ps": 3.2,  "pb": 1.5},
-    "MS":    {"name": "Morgan Stanley",          "shares_b": 1.61,  "pe": 15.6, "f_pe": 13.8, "ev_ebitda": 11.8, "ps": 3.4,  "pb": 1.8},
-    "BLK":   {"name": "BlackRock, Inc.",         "shares_b": 0.15,  "pe": 22.8, "f_pe": 19.5, "ev_ebitda": 16.9, "ps": 7.2,  "pb": 3.4},
-    "V":     {"name": "Visa Inc.",               "shares_b": 1.95,  "pe": 29.4, "f_pe": 25.1, "ev_ebitda": 21.8, "ps": 15.8, "pb": 14.6},
-    "MC.PA": {"name": "LVMH Moet Hennessy",      "shares_b": 0.50,  "pe": 23.5, "f_pe": 21.0, "ev_ebitda": 14.2, "ps": 4.1,  "pb": 5.2},
-    "OR.PA": {"name": "L'Oreal S.A.",            "shares_b": 0.53,  "pe": 31.0, "f_pe": 27.8, "ev_ebitda": 20.5, "ps": 5.1,  "pb": 6.9},
-    "AIR.PA":{"name": "Airbus SE",               "shares_b": 0.79,  "pe": 26.4, "f_pe": 20.2, "ev_ebitda": 13.8, "ps": 1.8,  "pb": 6.1},
-    "TTE.PA":{"name": "TotalEnergies SE",        "shares_b": 2.28,  "pe": 8.4,  "f_pe": 7.9,  "ev_ebitda": 5.1,  "ps": 0.7,  "pb": 1.2},
-    "BNP.PA":{"name": "BNP Paribas SA",          "shares_b": 1.13,  "pe": 7.6,  "f_pe": 6.9,  "ev_ebitda": 6.2,  "ps": 1.5,  "pb": 0.65},
-    "QQQ":   {"name": "Invesco QQQ (Nasdaq 100)","shares_b": 0.62,  "pe": 30.8, "f_pe": 25.4, "ev_ebitda": 21.5, "ps": 6.8,  "pb": 8.4},
-    "SPY":   {"name": "SPDR S&P 500 ETF Trust",  "shares_b": 0.98,  "pe": 24.6, "f_pe": 21.1, "ev_ebitda": 16.8, "ps": 3.1,  "pb": 4.8},
-    "DIA":   {"name": "SPDR Dow Jones ETF",      "shares_b": 0.09,  "pe": 21.4, "f_pe": 18.9, "ev_ebitda": 14.9, "ps": 2.7,  "pb": 5.1},
-    "IWM":   {"name": "iShares Russell 2000 ETF","shares_b": 0.31,  "pe": 18.2, "f_pe": 16.4, "ev_ebitda": 12.8, "ps": 1.4,  "pb": 2.1},
+COLORS = {
+    "bg": "#0b0e11",
+    "panel": "#11151c",
+    "grid": "#1c222b",
+    "accent": "#3b82f6",
+    "median": "#f59e0b",
+    "up": "#10b981",
+    "down": "#ef4444",
 }
 
-# Mapping indices
-INDEX_PROXY_MAP = {
-    "NQ=F": ("QQQ", "Invesco QQQ (Proxy Nasdaq 100)"),
-    "^NDX": ("QQQ", "Invesco QQQ (Proxy Nasdaq 100)"),
-    "^IXIC": ("QQQ", "Invesco QQQ (Proxy Nasdaq)"),
-    "ES=F": ("SPY", "SPDR S&P 500 ETF (Proxy S&P 500)"),
-    "^GSPC": ("SPY", "SPDR S&P 500 ETF (Proxy S&P 500)"),
-    "YM=F": ("DIA", "SPDR Dow Jones ETF (Proxy Dow 30)"),
-    "RTY=F": ("IWM", "iShares Russell 2000 ETF")
-}
+def style_fig(fig: go.Figure, **kwargs) -> go.Figure:
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor=COLORS["bg"],
+        plot_bgcolor=COLORS["panel"],
+        font=dict(family="Inter, sans-serif", size=12, color="#c9d1d9"),
+        margin=dict(l=16, r=16, t=24, b=16),
+        xaxis=dict(gridcolor=COLORS["grid"], zerolinecolor="#2a323d"),
+        yaxis=dict(gridcolor=COLORS["grid"], zerolinecolor="#2a323d"),
+    )
+    if kwargs:
+        fig.update_layout(**kwargs)
+    return fig
 
-DEFAULT_UNIVERSE = list(INSTITUTIONAL_FALLBACK_DB.keys()) + ["NQ=F", "ES=F"]
+def batch_paths(paths_2d: np.ndarray, time_steps: np.ndarray):
+    n = paths_2d.shape[1]
+    if n == 0:
+        return [], []
+    x = np.tile(np.append(time_steps, np.nan), n)
+    y = np.vstack([paths_2d, np.full((1, n), np.nan)]).T.ravel()
+    return x, y
 
-# Series temporelles
-@st.cache_data(ttl=180, show_spinner=False)
-def fetch_historical_series(ticker: str, years: int = 5):
-    now = datetime.datetime.now()
-    start_date = now - datetime.timedelta(days=years * 365 + 15)
-    end_date = now + datetime.timedelta(days=1)
-    
-    try:
-        t_obj = yf.Ticker(ticker)
-        data = t_obj.history(start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'), auto_adjust=True)
-        
-        if data.empty or 'Close' not in data.columns:
-            data = yf.download(ticker, start=start_date, end=end_date, progress=False, auto_adjust=True)
-            if data.empty:
-                return pd.Series(dtype=float), None, "INDISPONIBLE"
-            prices = data['Close'].iloc[:, 0] if isinstance(data.columns, pd.MultiIndex) else data['Close']
-        else:
-            prices = data['Close']
-            
-        prices = prices.dropna()
-        if prices.empty:
-            return pd.Series(dtype=float), None, "INDISPONIBLE"
-
-        prices.index = pd.to_datetime(prices.index).tz_localize(None)
-        status_mode = "CLOTURE OFFICIELLE"
-        
-        # Flux intraday
-        try:
-            intraday = t_obj.history(period="5d", interval="5m", prepost=True)
-            if not intraday.empty and 'Close' in intraday.columns:
-                last_intra_val = float(intraday['Close'].dropna().iloc[-1])
-                last_intra_ts = pd.to_datetime(intraday.index[-1]).tz_localize(None)
-                last_daily_date = prices.index[-1].date()
-                
-                if last_intra_ts.date() > last_daily_date:
-                    new_point = pd.Series([last_intra_val], index=[pd.Timestamp(last_intra_ts.date())])
-                    prices = pd.concat([prices, new_point])
-                    status_mode = "TEMPS REEL / PRE-MARCHE"
-                elif last_intra_ts.date() == last_daily_date:
-                    prices.iloc[-1] = last_intra_val
-                    if last_intra_ts.date() == now.date():
-                        status_mode = "TEMPS REEL / INTRADAY"
-        except Exception:
-            pass
-
-        last_dt = prices.index[-1]
-        return pd.Series(prices.values.ravel(), index=prices.index, name=ticker), last_dt, status_mode
-    except Exception:
-        return pd.Series(dtype=float), None, "INDISPONIBLE"
-
-# Extraction fondamentaux
-@st.cache_data(ttl=600, show_spinner=False)
-def fetch_fundamentals_bulletproof(tickers: tuple):
-    rows = []
-    for t in tickers:
-        eff_t = INDEX_PROXY_MAP[t][0] if t in INDEX_PROXY_MAP else t
-        fb = INSTITUTIONAL_FALLBACK_DB.get(eff_t, {})
-        
-        # Prix historique
-        s_hist, _, _ = fetch_historical_series(eff_t, years=1)
-        live_price = float(s_hist.iloc[-1]) if not s_hist.empty else np.nan
-        
-        name = fb.get("name", eff_t)
-        mcap_b = (live_price * fb["shares_b"]) if (pd.notnull(live_price) and "shares_b" in fb) else np.nan
-        pe = fb.get("pe", np.nan)
-        f_pe = fb.get("f_pe", np.nan)
-        ev_ebitda = fb.get("ev_ebitda", np.nan)
-        ps = fb.get("ps", np.nan)
-        pb = fb.get("pb", np.nan)
-
-        # Enrichissement API
-        try:
-            info = yf.Ticker(eff_t).info
-            if info and isinstance(info, dict):
-                name = info.get('shortName') or info.get('longName') or name
-                if info.get('marketCap'):
-                    mcap_b = info['marketCap'] / 1e9
-                if info.get('trailingPE'):
-                    pe = float(info['trailingPE'])
-                if info.get('forwardPE'):
-                    f_pe = float(info['forwardPE'])
-                if info.get('enterpriseToEbitda'):
-                    ev_ebitda = float(info['enterpriseToEbitda'])
-                if info.get('priceToSalesTrailing12Months'):
-                    ps = float(info['priceToSalesTrailing12Months'])
-                if info.get('priceToBook'):
-                    pb = float(info['priceToBook'])
-        except Exception:
-            pass
-
-        # Secours capitalisation
-        if pd.isnull(mcap_b):
-            try:
-                fi = yf.Ticker(eff_t).fast_info
-                if hasattr(fi, 'market_cap') and fi.market_cap:
-                    mcap_b = fi.market_cap / 1e9
-            except Exception:
-                pass
-
-        rows.append({
-            'Ticker': t,
-            'Nom': name,
-            'Prix ($)': live_price,
-            'Capitalisation ($B)': mcap_b,
-            'P/E (Trailing)': pe,
-            'Forward P/E': f_pe,
-            'EV/EBITDA': ev_ebitda,
-            'P/S': ps,
-            'P/B': pb
-        })
-    return pd.DataFrame(rows)
-
-# Recherche actifs
-@st.cache_data(ttl=900, show_spinner=False)
+# Donnees marche
+@st.cache_data(ttl=1800, show_spinner=False)
 def search_securities(query: str):
     if not query or len(query.strip()) < 2:
         return []
     try:
-        s = yf.Search(query, max_results=8)
-        results = []
-        for q in s.quotes:
-            symbol = q.get('symbol', '')
-            name = q.get('shortname') or q.get('longname') or symbol
-            qtype = q.get('quoteType', 'EQUITY')
-            exch = q.get('exchange', '')
-            results.append((symbol, f"{symbol} — {name} [{exch} | {qtype}]"))
-        return results
+        quotes = yf.Search(query, max_results=10).quotes
+        return [
+            (
+                q.get("symbol", ""),
+                f"{q.get('symbol', '')} — {q.get('shortname') or q.get('longname') or q.get('symbol', '')} [{q.get('exchange', '')}]",
+            )
+            for q in quotes if q.get("symbol")
+        ]
     except Exception:
         return []
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_close(ticker: str, years: int = 5) -> pd.Series:
+    start = datetime.datetime.now() - datetime.timedelta(days=years * 365 + 30)
+    data = yf.download(ticker, start=start, progress=False)
+    if data.empty:
+        return pd.Series(dtype=float)
+    prices = data["Close"] if "Close" in data else data.iloc[:, 0]
+    if isinstance(prices, pd.DataFrame):
+        prices = prices.iloc[:, 0]
+    prices = prices.dropna()
+    return pd.Series(prices.values.ravel(), index=prices.index, name=ticker)
 
-# Page accueil
-if st.session_state.page == "home":
-    now_str = datetime.datetime.now().strftime("%d %b %Y — %H:%M")
-    st.markdown(f"""
-    <div class="hero-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-            <span style="color: #00e5ff; font-family: 'JetBrains Mono'; font-size: 0.82rem; letter-spacing: 0.12em;">
-                PLATEFORME QUANTITATIVE INSTITUTIONNELLE
-            </span>
-            <span class="live-badge">SYNCHRONISATION : {now_str}</span>
-        </div>
-        <h1 style="font-size: 2.4rem; font-weight: 800; color: #ffffff; margin: 14px 0 10px 0;">
-            QuantValuation & Stochastic Risk Terminal
-        </h1>
-        <p style="font-size: 1.02rem; color: #94a3b8; max-width: 820px; line-height: 1.6;">
-            Analyse fondamentale multi-ratios (P/E Trailing vs Forward P/E), cones de probabilite Monte Carlo 
-            et mesure du risque extreme (VaR Cornish-Fisher) connectes aux flux de marche en direct.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_fundamentals(tickers: tuple) -> pd.DataFrame:
+    rows = []
+    for t in tickers:
+        try:
+            info = yf.Ticker(t).info
+            cap = info.get("marketCap")
+            rows.append({
+                "Ticker": t,
+                "Nom": info.get("shortName", t),
+                "Cap. ($B)": cap / 1e9 if cap else np.nan,
+                "P/E": info.get("trailingPE", np.nan),
+                "Fwd P/E": info.get("forwardPE", np.nan),
+                "EV/EBITDA": info.get("enterpriseToEbitda", np.nan),
+                "P/S": info.get("priceToSalesTrailing12Months", np.nan),
+                "P/B": info.get("priceToBook", np.nan),
+            })
+        except Exception:
+            rows.append({"Ticker": t, "Nom": t})
+    return pd.DataFrame(rows)
 
-    col_l, col_r = st.columns([3, 2])
-    with col_l:
-        st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
-        st.markdown("#### Lancer une analyse d'actif")
-        home_query = st.text_input("Symbole ou nom d'entreprise :", value=st.session_state.selected_ticker)
-        res = search_securities(home_query)
-        if res:
-            sel = st.selectbox("Resultats :", options=res, format_func=lambda x: x[1])
-            target_sym = sel[0]
-        else:
-            target_sym = home_query.upper().strip() or "NVDA"
-            
-        if st.button("Ouvrir le Terminal Quantitatif", type="primary", use_container_width=True):
-            go_to_terminal(ticker=target_sym)
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+# Sidebar
+st.sidebar.markdown("**Paramètres**")
+search_term = st.sidebar.text_input("Actif (ticker ou nom)", value="NVDA")
+search_results = search_securities(search_term)
 
-    with col_r:
-        st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
-        st.markdown("#### Univers Sectoriels Preconfigures")
-        if st.button("Big Tech & IA (NVDA, MSFT, GOOGL, AMZN, AAPL, META)", use_container_width=True):
-            go_to_terminal("NVDA", ["MSFT", "GOOGL", "AMZN", "AAPL", "META"])
-            st.rerun()
-        if st.button("Contrats Futures & Indices US (NQ=F, QQQ, SPY, DIA, IWM)", use_container_width=True):
-            go_to_terminal("NQ=F", ["QQQ", "SPY", "DIA", "IWM"])
-            st.rerun()
-        if st.button("Banques Wall Street (JPM, GS, MS, BLK, V)", use_container_width=True):
-            go_to_terminal("JPM", ["GS", "MS", "BLK", "V"])
-            st.rerun()
-        if st.button("Leaders CAC 40 (MC.PA, OR.PA, AIR.PA, TTE.PA, BNP.PA)", use_container_width=True):
-            go_to_terminal("MC.PA", ["OR.PA", "AIR.PA", "TTE.PA", "BNP.PA"])
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-
-# Terminal quantitatif
+if search_results:
+    primary_ticker = st.sidebar.selectbox(
+        "Sélection", options=search_results, format_func=lambda x: x[1]
+    )[0]
 else:
-    # En-tete barre laterale
-    st.sidebar.markdown("""
-    <div class="sidebar-brand">
-        <div style="font-family:'JetBrains Mono'; font-size:0.75rem; color:#00e5ff; letter-spacing:0.15em; font-weight:700;">
-            QUANT TERMINAL v2.5
-        </div>
-        <div style="font-size:0.72rem; color:#94a3b8; margin-top:2px;">
-            CONSOLE DE PARAMETRAGE
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    primary_ticker = search_term.upper().strip() or "QQQ"
 
-    col_sb1, col_sb2 = st.sidebar.columns(2)
-    with col_sb1:
-        if st.button("Accueil", use_container_width=True):
-            go_to_home()
-            st.rerun()
-    with col_sb2:
-        if st.button("Actualiser", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
+default_peers = "SPY, IWM, DIA" if any(k in primary_ticker for k in ("QQQ", "IXIC")) else "MSFT, GOOGL, AMZN, AAPL"
+peers_input = st.sidebar.text_input("Comparables", value=default_peers)
+peer_list = [p.strip().upper() for p in peers_input.split(",") if p.strip()]
 
-    # Section actif
-    st.sidebar.markdown('<div class="sidebar-section">01 / Univers & Actifs</div>', unsafe_allow_html=True)
-    search_term = st.sidebar.text_input(
-        "Recherche d'actif (NVDA, NQ=F, AAPL)",
-        value=st.session_state.selected_ticker
-    )
-    search_results = search_securities(search_term)
+st.sidebar.divider()
+n_simulations = st.sidebar.slider("Simulations Monte Carlo", 500, 10000, 2500, 500)
+forecast_days = st.sidebar.slider("Horizon (jours ouvrés)", 21, 504, 252, 21)
+history_years = st.sidebar.selectbox("Historique (années)", [1, 3, 5, 10], index=2)
+macro_ticker = st.sidebar.text_input("Benchmark", value="^GSPC")
 
-    if search_results:
-        selected_tuple = st.sidebar.selectbox(
-            "Resultats disponibles :",
-            options=search_results,
-            format_func=lambda x: x[1]
-        )
-        primary_ticker = selected_tuple[0]
-    else:
-        primary_ticker = search_term.upper().strip() if search_term else "NVDA"
+# Chargement centralise
+hist_prices = fetch_close(primary_ticker, years=history_years)
+has_history = len(hist_prices) > 30
 
-    st.session_state.selected_ticker = primary_ticker
+if has_history:
+    log_ret = np.log(hist_prices / hist_prices.shift(1)).dropna()
+    drift_daily = float(log_ret.mean())  # deja egal a mu - 0.5 * sigma^2
+    sigma_daily = float(log_ret.std())
+    mu_ann = (drift_daily + 0.5 * sigma_daily**2) * 252
+    sigma_ann = sigma_daily * np.sqrt(252)
+    s0 = float(hist_prices.iloc[-1])
 
-    available_options = sorted(list(set(DEFAULT_UNIVERSE + st.session_state.selected_peers + [primary_ticker])))
-    default_peers = [p for p in st.session_state.selected_peers if p != primary_ticker]
-    
-    peer_list = st.sidebar.multiselect(
-        "Actifs comparables :",
-        options=[x for x in available_options if x != primary_ticker],
-        default=default_peers[:5]
-    )
+# En-tete compact
+price_badge = f"<span style='font-family:JetBrains Mono;color:#9ca3af;font-size:1.1rem;'>${s0:,.2f}</span>" if has_history else ""
+st.markdown(
+    f"<div class='ticker-header'><span style='font-size:1.4rem;font-weight:600;color:#fff;'>{primary_ticker}</span>{price_badge}</div>",
+    unsafe_allow_html=True,
+)
 
-    # Section stochastique
-    st.sidebar.markdown('<div class="sidebar-section">02 / Modele Stochastique</div>', unsafe_allow_html=True)
-    stoch_model = st.sidebar.selectbox(
-        "Loi de distribution",
-        ["GBM Classique (Loi Normale)", "Queues Epaisses (t-Student, df=5)"]
-    )
-    n_simulations = st.sidebar.slider("Trajectoires Monte Carlo", 500, 10000, 2500, 500)
-    forecast_days = st.sidebar.slider("Horizon (jours ouvres)", 21, 504, 252, 21)
-    history_years = st.sidebar.selectbox("Profondeur historique (ans)", [1, 3, 5, 10], index=2)
+tab_val, tab_mc, tab_risk, tab_bench = st.tabs(["Multiples", "Monte Carlo", "Risque (VaR/CVaR)", "Benchmark"])
 
-    # Section macro
-    st.sidebar.markdown('<div class="sidebar-section">03 / Facteur Macro</div>', unsafe_allow_html=True)
-    macro_ticker = st.sidebar.text_input("Indice de reference", value="^GSPC")
-
-    # Chargement donnees
-    hist_prices, last_quote_dt, status_mode = fetch_historical_series(primary_ticker, years=history_years)
+# Onglet 1 : Multiples
+with tab_val:
     all_tickers = tuple([primary_ticker] + [p for p in peer_list if p != primary_ticker])
-    df_metrics = fetch_fundamentals_bulletproof(all_tickers)
+    df_metrics = fetch_fundamentals(all_tickers)
+    ratio_cols = ["P/E", "Fwd P/E", "EV/EBITDA", "P/S", "P/B"]
 
-    if last_quote_dt is not None:
-        date_str = last_quote_dt.strftime("%d/%m/%Y")
-        badge_text = f"DERNIERE COTATION : {date_str} ({status_mode})"
+    if not df_metrics.empty and "P/E" in df_metrics.columns:
+        col_tbl, col_chart = st.columns([1.1, 1])
+        fmt_num = lambda x: f"{x:.2f}" if pd.notnull(x) else "—"
+        formatters = {"Cap. ($B)": lambda x: f"{x:.1f}B" if pd.notnull(x) else "—", **{c: fmt_num for c in ratio_cols}}
+
+        with col_tbl:
+            st.dataframe(df_metrics.set_index("Ticker").style.format(formatters), use_container_width=True)
+            selected_ratio = st.selectbox("Multiple affiché", ratio_cols)
+
+        with col_chart:
+            df_plot = df_metrics.dropna(subset=[selected_ratio])
+            if not df_plot.empty:
+                med_val = df_plot[selected_ratio].median()
+                colors = [
+                    (COLORS["up"] if v <= med_val else COLORS["down"]) if t == primary_ticker else COLORS["accent"]
+                    for t, v in zip(df_plot["Ticker"], df_plot[selected_ratio])
+                ]
+                fig_bar = go.Figure(go.Bar(
+                    x=df_plot["Ticker"],
+                    y=df_plot[selected_ratio],
+                    marker_color=colors,
+                    text=df_plot[selected_ratio].map(lambda x: f"{x:.1f}x"),
+                    textposition="outside",
+                ))
+                fig_bar.add_hline(y=med_val, line=dict(color=COLORS["median"], dash="dash", width=1.5),
+                                  annotation_text=f"Médiane {med_val:.1f}x", annotation_position="top right")
+                st.plotly_chart(style_fig(fig_bar, yaxis_title=selected_ratio), use_container_width=True)
+
+# Onglet 2 : Monte Carlo
+with tab_mc:
+    if has_history:
+        shocks = np.random.normal(0, 1, (forecast_days, n_simulations))
+        cum_log = np.vstack([np.zeros((1, n_simulations)), np.cumsum(drift_daily + sigma_daily * shocks, axis=0)])
+        paths = s0 * np.exp(cum_log)
+        final_prices = paths[-1]
+        p5, p50, p95 = np.percentile(final_prices, [5, 50, 95])
+        prob_bull = float(np.mean(final_prices > s0) * 100)
+
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("Drift annuel (μ)", f"{mu_ann * 100:+.1f}%")
+        m2.metric("Volatilité (σ)", f"{sigma_ann * 100:.1f}%")
+        m3.metric("Médiane (P50)", f"${p50:.2f}", f"{(p50 / s0 - 1) * 100:+.1f}%")
+        m4.metric("Intervalle 90%", f"${p5:.0f} – ${p95:.0f}")
+        m5.metric("Prob. hausse", f"{prob_bull:.1f}%")
+
+        c1, c2 = st.columns([3, 2])
+        with c1:
+            t_axis = np.arange(forecast_days + 1, dtype=float)
+            sample = paths[:, :min(n_simulations, 120)]
+            bull_mask = sample[-1] >= s0
+
+            fig_paths = go.Figure()
+            for mask, rgba in [(bull_mask, "rgba(16,185,129,0.12)"), (~bull_mask, "rgba(239,68,68,0.12)")]:
+                bx, by = batch_paths(sample[:, mask], t_axis)
+                fig_paths.add_trace(go.Scatter(x=bx, y=by, mode="lines", line=dict(color=rgba, width=1),
+                                               showlegend=False, hoverinfo="skip"))
+
+            for q, label, color, dash in [
+                (95, "P95", COLORS["up"], "dash"),
+                (50, "Médiane", COLORS["median"], "solid"),
+                (5, "P5", COLORS["down"], "dash"),
+            ]:
+                fig_paths.add_trace(go.Scatter(
+                    x=t_axis, y=np.percentile(paths, q, axis=1), mode="lines",
+                    line=dict(color=color, width=2 if q == 50 else 1.4, dash=dash), name=label,
+                ))
+
+            st.plotly_chart(
+                style_fig(fig_paths, xaxis_title="Jours ouvrés", yaxis_title="Prix ($)",
+                          legend=dict(yanchor="top", y=0.98, xanchor="left", x=0.02, bgcolor="rgba(17,21,28,0.8)")),
+                use_container_width=True,
+            )
+
+        with c2:
+            fig_hist = go.Figure()
+            fig_hist.add_trace(go.Histogram(x=final_prices[final_prices >= s0], nbinsx=30, marker_color=COLORS["up"], opacity=0.7))
+            fig_hist.add_trace(go.Histogram(x=final_prices[final_prices < s0], nbinsx=30, marker_color=COLORS["down"], opacity=0.7))
+            fig_hist.add_vline(x=s0, line_color="#9ca3af", line_dash="dash", line_width=1)
+            fig_hist.add_vline(x=p50, line_color=COLORS["median"], line_width=2, annotation_text=f"P50 ${p50:.1f}")
+            st.plotly_chart(style_fig(fig_hist, barmode="overlay", xaxis_title="Prix terminal ($)", showlegend=False),
+                            use_container_width=True)
+
+        with st.expander("Méthodologie GBM"):
+            st.latex(r"S_t = S_0 \exp\left(\left(\mu - \frac{1}{2}\sigma^2\right)t + \sigma W_t\right)")
     else:
-        date_str = "N/A"
-        badge_text = "FLUX HORS LIGNE"
+        st.warning(f"Historique insuffisant pour {primary_ticker}.")
 
-    # En-tete principal
-    st.markdown(f"""
-    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
-        <div>
-            <div style="font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; color: #00e5ff; font-family:'JetBrains Mono';">
-                PLATEFORME QUANTITATIVE INSTITUTIONNELLE
-            </div>
-            <div style="font-size: 2.1rem; font-weight: 800; color: #ffffff; margin-top: 2px;">
-                ANALYSE D'ACTIF : {primary_ticker}
-            </div>
-        </div>
-        <div class="live-badge">{badge_text}</div>
-    </div>
-    """, unsafe_allow_html=True)
+# Onglet 3 : VaR & CVaR
+with tab_risk:
+    if has_history:
+        returns = log_ret.values
+        conf = st.slider("Niveau de confiance", 0.90, 0.99, 0.95, 0.01)
+        alpha = 1.0 - conf
+        s_val, k_val = float(skew(returns)), float(kurtosis(returns))
+        z = norm.ppf(alpha)
+        z_cf = z + (z**2 - 1) * s_val / 6 + (z**3 - 3 * z) * k_val / 24 - (2 * z**3 - 5 * z) * (s_val**2) / 36
 
-    # Calculs globaux
-    if len(hist_prices) > 30:
-        s0 = float(hist_prices.iloc[-1])
-        s_prev = float(hist_prices.iloc[-2])
-        daily_chg = ((s0 - s_prev) / s_prev) * 100
-        
-        log_ret = np.log(hist_prices / hist_prices.shift(1)).dropna()
-        mu_daily = float(log_ret.mean())
-        sigma_daily = float(log_ret.std())
-        mu_ann = mu_daily * 252
-        sigma_ann = sigma_daily * np.sqrt(252)
-        
-        s_val = float(skew(log_ret.values))
-        k_val = float(kurtosis(log_ret.values))
-        z95 = norm.ppf(0.05)
-        z_cf95 = z95 + (1/6)*(z95**2 - 1)*s_val + (1/24)*(z95**3 - 3*z95)*k_val - (1/36)*(2*z95**3 - 5*z95)*(s_val**2)
-        var95_pct = -(mu_daily + z_cf95 * sigma_daily) * 100
+        var_cf = -(drift_daily + z_cf * sigma_daily)
+        var_hist = float(-np.percentile(returns, alpha * 100))
+        tail = returns[returns <= -var_hist]
+        cvar_hist = float(-tail.mean()) if len(tail) else var_hist
 
-        pe_median = df_metrics['P/E (Trailing)'].median()
-        total_mcap_t = df_metrics['Capitalisation ($B)'].sum() / 1000.0
+        r1, r2, r3, r4 = st.columns(4)
+        r1.metric("Skewness", f"{s_val:.3f}")
+        r2.metric("Excess Kurtosis", f"{k_val:.3f}")
+        r3.metric(f"VaR CF {conf * 100:.0f}% (1j)", f"{var_cf * 100:.2f}%", f"-${s0 * var_cf:.2f}")
+        r4.metric(f"CVaR {conf * 100:.0f}% (1j)", f"{cvar_hist * 100:.2f}%", f"-${s0 * cvar_hist:.2f}")
 
-        # Bandeau KPI
-        chg_class = "kpi-sub-pos" if daily_chg >= 0 else "kpi-sub-neg"
-        chg_sign = "+" if daily_chg >= 0 else ""
-        
-        k1, k2, k3, k4 = st.columns(4)
-        with k1:
-            st.markdown(f"""
-            <div class="kpi-card">
-                <div class="kpi-title">Cours Actuel ({date_str})</div>
-                <div class="kpi-value">
-                    ${s0:,.2f}
-                    <span class="{chg_class}">{chg_sign}{daily_chg:.2f}%</span>
-                </div>
-                <div class="kpi-sub-neutral">Capitalisation groupe : ${total_mcap_t:.2f}T</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with k2:
-            st.markdown(f"""
-            <div class="kpi-card kpi-card-alt">
-                <div class="kpi-title">P/E Median Sectoriel</div>
-                <div class="kpi-value">{pe_median:.1f}x</div>
-                <div class="kpi-sub-neutral">Sur {len(all_tickers)} actifs compares</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with k3:
-            st.markdown(f"""
-            <div class="kpi-card kpi-card-warn">
-                <div class="kpi-title">Volatilite Annualisee</div>
-                <div class="kpi-value">{sigma_ann * 100:.1f}%</div>
-                <div class="kpi-sub-neutral">Profondeur : {history_years} ans</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with k4:
-            st.markdown(f"""
-            <div class="kpi-card kpi-card-risk">
-                <div class="kpi-title">VaR 95% (Cornish-Fisher 1j)</div>
-                <div class="kpi-value">
-                    -{var95_pct:.2f}%
-                    <span class="kpi-sub-neg">-${s0 * (var95_pct/100):,.2f}</span>
-                </div>
-                <div class="kpi-sub-neutral">Ajustee Skewness & Kurtosis</div>
-            </div>
-            """, unsafe_allow_html=True)
+        fig_var = go.Figure(go.Histogram(x=returns * 100, nbinsx=80, marker_color=COLORS["accent"], opacity=0.65))
+        fig_var.add_vline(x=-var_cf * 100, line_color=COLORS["down"], line_width=2, annotation_text=f"VaR {var_cf * 100:.2f}%")
+        fig_var.add_vline(x=-cvar_hist * 100, line_color="#fb7185", line_width=2, line_dash="dash", annotation_text=f"CVaR {cvar_hist * 100:.2f}%")
+        st.plotly_chart(style_fig(fig_var, xaxis_title="Rendement journalier (%)", yaxis_title="Fréquence"), use_container_width=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        with st.expander("Formule Cornish-Fisher"):
+            st.latex(r"z_c = z_\alpha + \frac{1}{6}(z_\alpha^2 - 1)S + \frac{1}{24}(z_\alpha^3 - 3z_\alpha)K - \frac{1}{36}(2z_\alpha^3 - 5z_\alpha)S^2")
 
-    tabs = st.tabs([
-        "1. Multiples & Valorisation",
-        "2. Mouvement Brownien & Monte Carlo",
-        "3. Gestion des Risques (VaR & CVaR)",
-        "4. Analyse Factorielle & Correlations"
-    ])
-
-    # Generateur Monte Carlo
-    def build_monte_carlo_figure(height=420):
-        if "t-Student" in stoch_model:
-            df_t = 5
-            raw_shocks = student_t.rvs(df_t, size=(forecast_days, n_simulations))
-            shocks = raw_shocks / np.sqrt(df_t / (df_t - 2))
-        else:
-            shocks = np.random.normal(0, 1, (forecast_days, n_simulations))
-            
-        drift = (mu_daily - 0.5 * (sigma_daily ** 2))
-        daily_returns_sim = drift + sigma_daily * shocks
-        price_trajectories = s0 * np.exp(np.vstack([np.zeros((1, n_simulations)), np.cumsum(daily_returns_sim, axis=0)]))
-        
-        future_dates = pd.bdate_range(start=last_quote_dt, periods=forecast_days + 1)
-        p5_path = np.percentile(price_trajectories, 5, axis=1)
-        p25_path = np.percentile(price_trajectories, 25, axis=1)
-        p50_path = np.percentile(price_trajectories, 50, axis=1)
-        p75_path = np.percentile(price_trajectories, 75, axis=1)
-        p95_path = np.percentile(price_trajectories, 95, axis=1)
-
-        fig = go.Figure()
-        # Intervalle 5-95
-        fig.add_trace(go.Scatter(
-            x=future_dates, y=p95_path, mode='lines',
-            line=dict(color='rgba(0, 229, 255, 0.5)', width=1.2, dash='dot'), name='95e Centile'
-        ))
-        fig.add_trace(go.Scatter(
-            x=future_dates, y=p5_path, mode='lines',
-            fill='tonexty', fillcolor='rgba(0, 229, 255, 0.09)',
-            line=dict(color='rgba(0, 229, 255, 0.35)', width=1.2, dash='dot'), name='Cone 5% - 95%'
-        ))
-        # Intervalle 25-75
-        fig.add_trace(go.Scatter(
-            x=future_dates, y=p75_path, mode='lines',
-            line=dict(color='rgba(0, 230, 118, 0.55)', width=1.2), name='75e Centile'
-        ))
-        fig.add_trace(go.Scatter(
-            x=future_dates, y=p25_path, mode='lines',
-            fill='tonexty', fillcolor='rgba(0, 230, 118, 0.18)',
-            line=dict(color='rgba(0, 230, 118, 0.55)', width=1.2), name='Cone 25% - 75%'
-        ))
-        # Echantillon trajectoires
-        for j in range(min(n_simulations, 45)):
-            fig.add_trace(go.Scatter(
-                x=future_dates, y=price_trajectories[:, j], mode='lines',
-                line=dict(color='rgba(0, 229, 255, 0.12)', width=0.8),
-                showlegend=False, hoverinfo='skip'
-            ))
-        # Mediane
-        fig.add_trace(go.Scatter(
-            x=future_dates, y=p50_path, mode='lines',
-            line=dict(color='#00e676', width=2.8), name='Mediane (50%)'
-        ))
-        fig.update_layout(
-            height=height,
-            template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(11,17,29,0.5)",
-            margin=dict(l=10, r=10, t=20, b=10),
-            xaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
-            yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)", title="Prix ($)"),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)
-        )
-        return fig, price_trajectories, future_dates
-
-    # Onglet 1 : Multiples
-    with tabs[0]:
-        col_left, col_right = st.columns([1.1, 1])
-
-        with col_left:
-            st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
-            st.markdown("#### Valorisation Relative Sectorielle")
-            
-            st.dataframe(
-                df_metrics[['Ticker', 'Nom', 'Capitalisation ($B)', 'P/E (Trailing)', 'Forward P/E', 'EV/EBITDA']].set_index('Ticker'),
-                column_config={
-                    "Nom": st.column_config.TextColumn("Nom"),
-                    "Capitalisation ($B)": st.column_config.NumberColumn("Capitalisation ($B)", format="%.2fB"),
-                    "P/E (Trailing)": st.column_config.NumberColumn("P/E (Trailing)", format="%.2fx"),
-                    "Forward P/E": st.column_config.NumberColumn("Forward P/E", format="%.2fx"),
-                    "EV/EBITDA": st.column_config.NumberColumn("EV/EBITDA", format="%.1fx"),
-                },
-                use_container_width=True
-            )
-
-            ratio_choice = st.selectbox(
-                "Multiple de valorisation a analyser :",
-                ["P/E (Trailing) vs Forward P/E (Groupe)", "P/E (Trailing)", "Forward P/E", "EV/EBITDA", "P/S", "P/B"]
-            )
-
-            fig_bar = go.Figure()
-            if "Groupe" in ratio_choice:
-                med_pe = df_metrics['P/E (Trailing)'].median()
-                fig_bar.add_trace(go.Bar(
-                    x=df_metrics['Ticker'],
-                    y=df_metrics['P/E (Trailing)'],
-                    name="P/E Trailing",
-                    marker_color="#00e5ff",
-                    text=df_metrics['P/E (Trailing)'].apply(lambda x: f"{x:.1f}x"),
-                    textposition="outside"
-                ))
-                fig_bar.add_trace(go.Bar(
-                    x=df_metrics['Ticker'],
-                    y=df_metrics['Forward P/E'],
-                    name="Forward P/E",
-                    marker_color="#00e676",
-                    text=df_metrics['Forward P/E'].apply(lambda x: f"{x:.1f}x"),
-                    textposition="outside"
-                ))
-                fig_bar.add_hline(
-                    y=med_pe,
-                    line=dict(color="#ffab00", dash="dash", width=1.8),
-                    annotation_text=f"Mediane : {med_pe:.1f}x",
-                    annotation_position="top right"
-                )
-            else:
-                med_val = df_metrics[ratio_choice].median()
-                fig_bar.add_trace(go.Bar(
-                    x=df_metrics['Ticker'],
-                    y=df_metrics[ratio_choice],
-                    name=ratio_choice,
-                    marker_color="#00e5ff",
-                    text=df_metrics[ratio_choice].apply(lambda x: f"{x:.1f}x"),
-                    textposition="outside"
-                ))
-                fig_bar.add_hline(
-                    y=med_val,
-                    line=dict(color="#ffab00", dash="dash", width=1.8),
-                    annotation_text=f"Mediane : {med_val:.1f}x",
-                    annotation_position="top right"
-                )
-
-            y_max = max(df_metrics['P/E (Trailing)'].max(), df_metrics['Forward P/E'].max()) * 1.22
-            fig_bar.update_layout(
-                height=290,
-                barmode="group",
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(11,17,29,0.5)",
-                margin=dict(l=10, r=10, t=20, b=10),
-                yaxis=dict(range=[0, y_max], showgrid=True, gridcolor="rgba(255,255,255,0.05)"),
-                legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5)
-            )
-            st.plotly_chart(fig_bar, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with col_right:
-            st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
-            st.markdown("#### Simulation Monte Carlo & Trajectoires")
-            if len(hist_prices) > 30:
-                fig_mc_preview, price_trajectories, future_dates = build_monte_carlo_figure(height=535)
-                st.plotly_chart(fig_mc_preview, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # Onglet 2 : Monte Carlo
-    with tabs[1]:
-        if len(hist_prices) > 30:
-            fig_mc_full, price_trajectories, future_dates = build_monte_carlo_figure(height=440)
-            final_prices = price_trajectories[-1, :]
-            p50_end = float(np.median(final_prices))
-
-            c1, c2 = st.columns([3, 1.8])
-            with c1:
-                st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
-                st.markdown("#### Cone de Projection Stochastique")
-                st.plotly_chart(fig_mc_full, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-            with c2:
-                st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
-                st.markdown(f"#### Distribution au {future_dates[-1].strftime('%d/%m/%Y')}")
-                fig_hist = go.Figure()
-                fig_hist.add_trace(go.Histogram(
-                    x=final_prices[final_prices >= s0], nbinsx=35,
-                    marker_color='#00e676', opacity=0.75, name="Haussier (> S0)"
-                ))
-                fig_hist.add_trace(go.Histogram(
-                    x=final_prices[final_prices < s0], nbinsx=35,
-                    marker_color='#ff5252', opacity=0.75, name="Baissier (< S0)"
-                ))
-                fig_hist.add_vline(x=s0, line_color="#ffffff", line_dash="dash", annotation_text="S0")
-                fig_hist.add_vline(x=p50_end, line_color="#00e5ff", line_width=2, annotation_text=f"Mediane (${p50_end:.0f})")
-                fig_hist.update_layout(
-                    height=440,
-                    barmode='overlay',
-                    template="plotly_dark",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(11,17,29,0.5)",
-                    xaxis_title="Prix Final ($)",
-                    yaxis_title="Frequence",
-                    margin=dict(l=10, r=10, t=20, b=10),
-                    showlegend=False
-                )
-                st.plotly_chart(fig_hist, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-    # Onglet 3 : Risques
-    with tabs[2]:
-        if len(hist_prices) > 30:
-            st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
-            returns = log_ret.values
-            confidence_level = st.slider("Niveau de confiance statistique (1 - alpha)", 0.90, 0.99, 0.95, 0.01)
-            alpha = 1.0 - confidence_level
-            
-            z_norm = norm.ppf(alpha)
-            z_cf = (z_norm + (1/6)*(z_norm**2 - 1)*s_val + (1/24)*(z_norm**3 - 3*z_norm)*k_val - (1/36)*(2*z_norm**3 - 5*z_norm)*(s_val**2))
-            
-            var_cf_daily = -(mu_daily + z_cf * sigma_daily)
-            var_hist_daily = -np.percentile(returns, alpha * 100)
-            cvar_hist_daily = -returns[returns <= -var_hist_daily].mean()
-            
-            fig_var = go.Figure()
-            fig_var.add_trace(go.Histogram(
-                x=returns * 100, nbinsx=80,
-                marker_color='#00e5ff', opacity=0.65, name="Rendements Journaliers"
-            ))
-            fig_var.add_vline(x=-var_cf_daily * 100, line_color="#ffab00", line_width=2.2, annotation_text=f"VaR CF (-{var_cf_daily*100:.2f}%)")
-            fig_var.add_vline(x=-cvar_hist_daily * 100, line_color="#ff5252", line_width=2.2, line_dash="dash", annotation_text=f"CVaR (-{cvar_hist_daily*100:.2f}%)")
-            fig_var.update_layout(
-                height=420,
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(11,17,29,0.5)",
-                xaxis_title="Rendement Journalier (%)",
-                yaxis_title="Occurrences",
-                margin=dict(l=10, r=10, t=20, b=10)
-            )
-            st.plotly_chart(fig_var, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # Onglet 4 : Correlations
-    with tabs[3]:
-        s_bench, _, _ = fetch_historical_series(macro_ticker, years=history_years)
+# Onglet 4 : Benchmark
+with tab_bench:
+    if has_history:
+        s_bench = fetch_close(macro_ticker, years=history_years)
         df_pair = pd.DataFrame({primary_ticker: hist_prices, macro_ticker: s_bench}).dropna()
-        
-        if len(df_pair) > 30:
+
+        if not df_pair.empty:
             df_rebased = (df_pair / df_pair.iloc[0]) * 100
-            returns_pair = df_pair.pct_change().dropna()
-            rolling_corr = returns_pair[primary_ticker].rolling(60).corr(returns_pair[macro_ticker])
-            
-            c_cor1, c_cor2 = st.columns(2)
-            with c_cor1:
-                st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
-                fig_corr = go.Figure()
-                fig_corr.add_trace(go.Scatter(
-                    x=df_rebased.index, y=df_rebased[primary_ticker],
-                    name=f"{primary_ticker} (Base 100)", line=dict(color='#00e5ff', width=2)
-                ))
-                fig_corr.add_trace(go.Scatter(
-                    x=df_rebased.index, y=df_rebased[macro_ticker],
-                    name=f"{macro_ticker} (Base 100)", line=dict(color='#00e676', width=2)
-                ))
-                fig_corr.update_layout(
-                    height=400,
-                    template="plotly_dark",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(11,17,29,0.5)",
-                    title="Performance Comparee (Base 100)",
-                    margin=dict(l=10, r=10, t=40, b=10)
-                )
-                st.plotly_chart(fig_corr, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-            with c_cor2:
-                st.markdown('<div class="glass-panel">', unsafe_allow_html=True)
-                fig_roll = go.Figure()
-                fig_roll.add_trace(go.Scatter(
-                    x=rolling_corr.index, y=rolling_corr,
-                    mode='lines', fill='tozeroy',
-                    fillcolor='rgba(0, 230, 118, 0.14)',
-                    line=dict(color='#00e676', width=1.8),
-                    name="Correlation Glissante 60j"
-                ))
-                fig_roll.update_layout(
-                    height=400,
-                    template="plotly_dark",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(11,17,29,0.5)",
-                    title="Correlation Glissante 60 Jours",
-                    yaxis=dict(range=[-1, 1]),
-                    margin=dict(l=10, r=10, t=40, b=10)
-                )
-                st.plotly_chart(fig_roll, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+            ret_pair = df_pair.pct_change().dropna()
+            corr_ret = ret_pair[primary_ticker].corr(ret_pair[macro_ticker])
+            corr_lvl = df_pair[primary_ticker].corr(df_pair[macro_ticker])
+            var_b = float(ret_pair[macro_ticker].var())
+            beta = float(ret_pair[primary_ticker].cov(ret_pair[macro_ticker]) / var_b) if var_b > 0 else np.nan
+
+            b1, b2, b3 = st.columns(3)
+            b1.metric("Corrélation rendements", f"{corr_ret:.3f}")
+            b2.metric("Corrélation niveaux", f"{corr_lvl:.3f}")
+            b3.metric(f"Bêta vs {macro_ticker}", f"{beta:.2f}")
+
+            fig_corr = go.Figure()
+            fig_corr.add_trace(go.Scatter(x=df_rebased.index, y=df_rebased[primary_ticker], name=primary_ticker, line=dict(color=COLORS["up"], width=1.6)))
+            fig_corr.add_trace(go.Scatter(x=df_rebased.index, y=df_rebased[macro_ticker], name=macro_ticker, line=dict(color=COLORS["median"], width=1.6)))
+            st.plotly_chart(style_fig(fig_corr, yaxis_title="Base 100"), use_container_width=True)
+
