@@ -30,7 +30,7 @@ PRESETS = [
     ("Leaders CAC 40", "MC.PA", "OR.PA, AIR.PA, TTE.PA, BNP.PA"),
 ]
 
-# Theme CSS
+# Theme CSS temporaire (refonte visuelle prevue a l'etape suivante)
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
@@ -105,7 +105,7 @@ div[data-testid="metric-container"] {
 div[data-testid="stMetricValue"] {
     font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
-    font-size: 1.35rem;
+    font-size: 1.3rem;
     font-weight: 600;
 }
 
@@ -189,6 +189,57 @@ div[data-testid="stMetricValue"] {
     color: #93c5fd;
     margin-left: 14px;
 }
+
+/* Encadre de lecture dynamique */
+.signal-card {
+    background-color: #0f1623;
+    border: 1px solid #1e293b;
+    border-left: 3px solid #3b82f6;
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin-bottom: 18px;
+}
+.signal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+.signal-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 4px;
+}
+.signal-score {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: #94a3b8;
+}
+.signal-text {
+    font-size: 0.94rem;
+    line-height: 1.55;
+    color: #e2e8f0;
+    margin: 0;
+}
+.cond-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+.cond-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 4px 9px;
+    border-radius: 4px;
+    background: #111827;
+    border: 1px solid #263348;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -205,6 +256,35 @@ COLORS = {
 
 def currency_symbol(ticker: str) -> str:
     return "€" if ticker.endswith((".PA", ".DE", ".AS", ".MI", ".MC", ".BR")) else "$"
+
+def fmt_pnl(val: float, cur: str) -> str:
+    sign = "+" if val >= 0 else "-"
+    return f"{sign}{cur}{abs(val):,.0f}"
+
+def render_signal_card(badge: str, accent: str, text: str, right_meta: str = "", chips: list = None):
+    chips_html = ""
+    if chips:
+        items = []
+        for label, passed in chips:
+            if passed is None:
+                c_color, state = "#64748b", "N/A"
+            elif passed:
+                c_color, state = COLORS["up"], "OK"
+            else:
+                c_color, state = COLORS["down"], "NON"
+            items.append(f"<span class='cond-chip' style='border-color:{c_color}55;color:#cbd5e1;'><span style='color:{c_color};font-weight:600;'>{state}</span> · {label}</span>")
+        chips_html = f"<div class='cond-grid'>{''.join(items)}</div>"
+
+    st.markdown(f"""
+    <div class="signal-card" style="border-left-color: {accent};">
+        <div class="signal-head">
+            <span class="signal-badge" style="color: {accent}; background: {accent}1a; border: 1px solid {accent}55;">{badge}</span>
+            <span class="signal-score">{right_meta}</span>
+        </div>
+        <p class="signal-text">{text}</p>
+        {chips_html}
+    </div>
+    """, unsafe_allow_html=True)
 
 def style_fig(fig: go.Figure, **kwargs) -> go.Figure:
     fig.update_layout(
@@ -228,7 +308,7 @@ def batch_paths(paths_2d: np.ndarray, time_steps: np.ndarray):
     y = np.vstack([paths_2d, np.full((1, n), np.nan)]).T.ravel()
     return x, y
 
-# Statistiques de risque partagees
+# Statistiques de risque
 def compute_risk_stats(returns: np.ndarray, conf: float = 0.95) -> dict:
     alpha = 1.0 - conf
     mu = float(np.mean(returns))
@@ -252,6 +332,145 @@ def compute_risk_stats(returns: np.ndarray, conf: float = 0.95) -> dict:
         "var_cf": var_cf,
         "var_hist": var_hist,
         "cvar": max(cvar_hist, 1e-6),
+    }
+
+# Calcul centralise Timing & Sizing
+def compute_timing_sizing(hist_prices: pd.Series, log_ret: pd.Series, capital: float, risk_pct: float, max_pos_pct: float) -> dict:
+    s0 = float(hist_prices.iloc[-1])
+    mm50 = hist_prices.rolling(50).mean()
+    mm200 = hist_prices.rolling(200).mean()
+
+    has_mm50 = mm50.dropna().shape[0] >= 1
+    has_mm200 = mm200.dropna().shape[0] >= 21
+
+    above_mm50 = bool(s0 >= float(mm50.iloc[-1])) if has_mm50 else None
+    if has_mm200:
+        mm200_now = float(mm200.iloc[-1])
+        dist_mm200 = (s0 / mm200_now - 1) * 100
+        mm200_slope = (mm200_now / float(mm200.iloc[-21]) - 1) * 100
+        above_mm200 = bool(s0 >= mm200_now)
+        slope_pos = bool(mm200_slope >= 0)
+        trend_label = "Haussière" if (above_mm200 and slope_pos) else ("Transition" if (above_mm200 or slope_pos) else "Baissière")
+    else:
+        dist_mm200, mm200_slope, above_mm200, slope_pos = np.nan, np.nan, None, None
+        trend_label = "Historique < 200j"
+
+    if len(hist_prices) >= 253:
+        mom_12_1 = (float(hist_prices.iloc[-22]) / float(hist_prices.iloc[-253]) - 1) * 100
+        mom_pos = bool(mom_12_1 > 0)
+    else:
+        mom_12_1, mom_pos = np.nan, None
+
+    vol_20 = log_ret.rolling(20).std() * np.sqrt(252)
+    long_win = min(252, max(60, len(log_ret) // 2))
+    vol_long = log_ret.rolling(long_win).std() * np.sqrt(252)
+    vol_ratio_series = (vol_20 / vol_long).dropna()
+    vol_ratio = float(vol_ratio_series.iloc[-1]) if not vol_ratio_series.empty else 1.0
+    vol_ok = bool(vol_ratio <= 1.25)
+
+    if vol_ratio > 1.35:
+        vol_regime = "Stress"
+    elif vol_ratio < 0.85:
+        vol_regime = "Calme"
+    else:
+        vol_regime = "Normal"
+
+    # Sizing par CVaR 95%
+    cvar_95 = compute_risk_stats(log_ret.values, conf=0.95)["cvar"]
+    raw_weight = (risk_pct / 100.0) / cvar_95
+    regime_mult = (1.0 / vol_ratio) if vol_ratio > 1.35 else 1.0
+    adj_weight = raw_weight * regime_mult
+    final_weight = min(adj_weight, max_pos_pct / 100.0)
+
+    target_amount = capital * final_weight
+    n_shares = int(target_amount // s0) if s0 > 0 else 0
+    real_amount = n_shares * s0
+    invest_base = real_amount if n_shares > 0 else target_amount
+    tail_loss = invest_base * cvar_95
+
+    # Evaluation des conditions (score dynamique)
+    conditions = [
+        ("Prix > MM200", above_mm200),
+        ("Pente MM200 > 0", slope_pos),
+        ("Prix > MM50", above_mm50),
+        ("Momentum 12-1M > 0", mom_pos),
+        ("Volatilité maîtrisée", vol_ok),
+    ]
+    valid_conds = [c[1] for c in conditions if c[1] is not None]
+    score = sum(1 for v in valid_conds if v)
+    total = len(valid_conds)
+    ratio_ok = (score / total) if total > 0 else 0.0
+
+    # Classification en 5 etats
+    if vol_ratio > 1.50 or score == 0:
+        status = "Zone de stress — Aversion au risque"
+        accent = COLORS["down"]
+        tranches = "Attendre accalmie (ou 3+ tranches)"
+        narrative = (
+            f"Le marché est en phase de stress ou de baisse marquée ({score}/{total} critères réunis, volatilité à {vol_ratio:.2f}x sa normale). "
+            f"Le modèle suggère de rester à l'écart tant que le titre ne stabilise pas sa volatilité ou ne repasse pas au-dessus de sa MM50."
+        )
+    elif ratio_ok >= 0.85:
+        status = "Fenêtre d'entrée favorable"
+        accent = COLORS["up"]
+        tranches = "1 à 2 tranches"
+        narrative = (
+            f"La quasi-totalité des signaux sont alignés ({score}/{total} critères réunis) : tendance porteuse, momentum positif et volatilité sous contrôle ({vol_ratio:.2f}x). "
+            f"Le cadre technique est propre pour engager jusqu'à {final_weight * 100:.1f}% du portefeuille en 1 à 2 tranches."
+        )
+    elif ratio_ok >= 0.65:
+        status = "Configuration intéressante — Entrée progressive"
+        accent = "#34d399"
+        tranches = "2 tranches"
+        narrative = (
+            f"La configuration est constructive ({score}/{total} critères réunis) mais un élément reste à surveiller. "
+            f"Un déploiement progressif en 2 tranches jusqu'à {final_weight * 100:.1f}% permet de participer au mouvement tout en lissant le point d'entrée."
+        )
+    elif ratio_ok >= 0.40:
+        status = "Phase indécise — Consolidation"
+        accent = COLORS["median"]
+        tranches = "2 à 3 tranches (ou surveillance)"
+        narrative = (
+            f"Les signaux sont partagés ({score}/{total} critères réunis) : l'actif hésite entre reprise et essoufflement. "
+            f"Mieux vaut garder le titre en watchlist ou n'initier qu'une première demi-tranche en attendant une direction plus franche."
+        )
+    else:
+        status = "Attente — Configuration fragile"
+        accent = "#f97316"
+        tranches = "Observation / 3 tranches max"
+        narrative = (
+            f"Trop peu de critères sont validés ({score}/{total}) : la dynamique reste dégradée et le risque d'entrer trop tôt est élevé. "
+            f"Le modèle recommande la patience jusqu'au retour au-dessus de la MM50 ou d'un momentum positif."
+        )
+
+    return {
+        "mm50": mm50,
+        "mm200": mm200,
+        "dist_mm200": dist_mm200,
+        "mm200_slope": mm200_slope,
+        "trend_label": trend_label,
+        "mom_12_1": mom_12_1,
+        "vol_ratio": vol_ratio,
+        "vol_regime": vol_regime,
+        "vol_ratio_series": vol_ratio_series,
+        "long_win": long_win,
+        "cvar_95": cvar_95,
+        "raw_weight": raw_weight,
+        "regime_mult": regime_mult,
+        "adj_weight": adj_weight,
+        "final_weight": final_weight,
+        "target_amount": target_amount,
+        "n_shares": n_shares,
+        "real_amount": real_amount,
+        "invest_base": invest_base,
+        "tail_loss": tail_loss,
+        "conditions": conditions,
+        "score": score,
+        "total": total,
+        "status": status,
+        "accent": accent,
+        "tranches": tranches,
+        "narrative": narrative,
     }
 
 # Recherche priorisee
@@ -427,6 +646,9 @@ def render_terminal():
         mu_ann = (drift_daily + 0.5 * sigma_daily**2) * 252
         sigma_ann = sigma_daily * np.sqrt(252)
         s0 = float(hist_prices.iloc[-1])
+        ts = compute_timing_sizing(hist_prices, log_ret, portfolio_capital, risk_budget_pct, max_pos_pct)
+    else:
+        ts = None
 
     price_html = f"<span class='term-price'>{cur}{s0:,.2f}</span>" if has_history else ""
     st.markdown(
@@ -454,26 +676,47 @@ def render_terminal():
             st.caption(f"Recalcul anti-split appliqué via Market Cap / Net Income pour : {', '.join(adjusted)}.")
 
         if not df_metrics.empty and "P/E" in df_metrics.columns:
-            fmt_num = lambda x: f"{x:.2f}" if pd.notnull(x) else "—"
-            formatters = {"Cap. ($B)": lambda x: f"{x:.1f}B" if pd.notnull(x) else "—", **{c: fmt_num for c in ratio_cols}}
-            st.dataframe(df_metrics.set_index("Ticker").style.format(formatters), use_container_width=True)
-
             col_ctrl, col_chart = st.columns([0.45, 1.55], gap="large")
             with col_ctrl:
                 selected_ratio = st.selectbox("Multiple à comparer", ratio_cols)
                 valid_vals = df_metrics[selected_ratio].dropna()
-                if not valid_vals.empty:
-                    med_val = float(valid_vals.median())
-                    target_val = df_metrics.loc[df_metrics["Ticker"] == primary_ticker, selected_ratio].values
+                med_val = float(valid_vals.median()) if not valid_vals.empty else np.nan
+                target_series = df_metrics.loc[df_metrics["Ticker"] == primary_ticker, selected_ratio]
+                target_val = float(target_series.values[0]) if (len(target_series) and pd.notnull(target_series.values[0])) else np.nan
+
+                if pd.notnull(med_val):
                     st.metric("Médiane du groupe", f"{med_val:.2f}x")
-                    if len(target_val) and pd.notnull(target_val[0]):
-                        spread = (target_val[0] / med_val - 1) * 100
-                        st.metric(f"{primary_ticker} vs Médiane", f"{target_val[0]:.2f}x", f"{spread:+.1f}%", delta_color="inverse")
+                if pd.notnull(target_val) and pd.notnull(med_val) and med_val > 0:
+                    spread = (target_val / med_val - 1) * 100
+                    st.metric(f"{primary_ticker} vs Médiane", f"{target_val:.2f}x", f"{spread:+.1f}%", delta_color="inverse")
+
+            # Lecture dynamique valorisation
+            if pd.notnull(target_val) and pd.notnull(med_val) and med_val > 0:
+                spread = (target_val / med_val - 1) * 100
+                pe_row = df_metrics.loc[df_metrics["Ticker"] == primary_ticker]
+                fwd_note = ""
+                if not pe_row.empty and pd.notnull(pe_row["P/E"].values[0]) and pd.notnull(pe_row["Fwd P/E"].values[0]):
+                    pe_t, pe_f = float(pe_row["P/E"].values[0]), float(pe_row["Fwd P/E"].values[0])
+                    if pe_f < pe_t * 0.9:
+                        fwd_note = f" Le Forward P/E ({pe_f:.1f}x) est nettement sous le P/E actuel ({pe_t:.1f}x), signe d'une croissance attendue des bénéfices."
+                    elif pe_f > pe_t * 1.1:
+                        fwd_note = f" Attention : le Forward P/E ({pe_f:.1f}x) dépasse le P/E actuel ({pe_t:.1f}x), ce qui reflète un ralentissement anticipé."
+
+                if spread <= -15:
+                    v_badge, v_col = "Décote sectorielle", COLORS["up"]
+                    v_txt = f"{primary_ticker} se traite {abs(spread):.1f}% sous la médiane du groupe sur le {selected_ratio} ({target_val:.1f}x vs {med_val:.1f}x). À croiser avec la qualité fondamentale pour écarter un piège de valeur.{fwd_note}"
+                elif spread >= 15:
+                    v_badge, v_col = "Prime sectorielle", COLORS["down"]
+                    v_txt = f"{primary_ticker} affiche une prime de {spread:+.1f}% face à ses comparables sur le {selected_ratio} ({target_val:.1f}x vs {med_val:.1f}x). Le marché intègre déjà des attentes élevées.{fwd_note}"
+                else:
+                    v_badge, v_col = "Valorisation en ligne", COLORS["accent"]
+                    v_txt = f"{primary_ticker} est valorisé proche de la médiane sectorielle sur le {selected_ratio} ({target_val:.1f}x vs {med_val:.1f}x, écart {spread:+.1f}%).{fwd_note}"
+
+                render_signal_card(v_badge, v_col, v_txt, right_meta=f"Multiple : {selected_ratio}")
 
             with col_chart:
                 df_plot = df_metrics.dropna(subset=[selected_ratio])
                 if not df_plot.empty:
-                    med_val = float(df_plot[selected_ratio].median())
                     max_y = float(df_plot[selected_ratio].max())
                     colors = [
                         (COLORS["up"] if v <= med_val else COLORS["down"]) if t == primary_ticker else COLORS["accent"]
@@ -498,89 +741,43 @@ def render_terminal():
                         use_container_width=True,
                     )
 
+            fmt_num = lambda x: f"{x:.2f}" if pd.notnull(x) else "—"
+            formatters = {"Cap. ($B)": lambda x: f"{x:.1f}B" if pd.notnull(x) else "—", **{c: fmt_num for c in ratio_cols}}
+            st.dataframe(df_metrics.set_index("Ticker").style.format(formatters), use_container_width=True)
+
     # Onglet 2 : Timing & Sizing
     with tab_ts:
-        if has_history:
-            mm50 = hist_prices.rolling(50).mean()
-            mm200 = hist_prices.rolling(200).mean()
-            has_mm200 = mm200.dropna().shape[0] >= 21
+        if has_history and ts is not None:
+            render_signal_card(
+                badge=ts["status"],
+                accent=ts["accent"],
+                text=ts["narrative"],
+                right_meta=f"Score modèle : {ts['score']} / {ts['total']} conditions",
+                chips=ts["conditions"],
+            )
 
-            if has_mm200:
-                mm200_now = float(mm200.iloc[-1])
-                dist_mm200 = (s0 / mm200_now - 1) * 100
-                mm200_slope = (mm200_now / float(mm200.iloc[-21]) - 1) * 100
-                trend_label = "Haussière" if (s0 >= mm200_now and mm200_slope >= 0) else (
-                    "Transition" if (s0 >= mm200_now or mm200_slope >= 0) else "Baissière"
-                )
-            else:
-                mm200_now, dist_mm200, mm200_slope, trend_label = np.nan, np.nan, np.nan, "Historique < 200j"
-
-            # Momentum 12-1 mois
-            if len(hist_prices) >= 253:
-                mom_12_1 = (float(hist_prices.iloc[-22]) / float(hist_prices.iloc[-253]) - 1) * 100
-            else:
-                mom_12_1 = np.nan
-
-            # Regime de volatilite (20j vs 252j)
-            vol_20 = log_ret.rolling(20).std() * np.sqrt(252)
-            long_win = min(252, max(60, len(log_ret) // 2))
-            vol_long = log_ret.rolling(long_win).std() * np.sqrt(252)
-            vol_ratio_series = (vol_20 / vol_long).dropna()
-            vol_ratio = float(vol_ratio_series.iloc[-1]) if not vol_ratio_series.empty else 1.0
-
-            if vol_ratio > 1.35:
-                vol_regime = "Stress"
-            elif vol_ratio < 0.85:
-                vol_regime = "Calme"
-            else:
-                vol_regime = "Normal"
-
-            # Sizing par CVaR 95% + ajustement de regime
-            risk_95 = compute_risk_stats(log_ret.values, conf=0.95)
-            cvar_95 = risk_95["cvar"]
-            raw_weight = (risk_budget_pct / 100.0) / cvar_95
-            regime_mult = (1.0 / vol_ratio) if vol_ratio > 1.35 else 1.0
-            adj_weight = raw_weight * regime_mult
-            final_weight = min(adj_weight, max_pos_pct / 100.0)
-
-            target_amount = portfolio_capital * final_weight
-            n_shares = int(target_amount // s0) if s0 > 0 else 0
-            real_amount = n_shares * s0
-            tail_loss_est = real_amount * cvar_95
-
-            # Plan d'entree
-            if trend_label == "Haussière" and vol_regime != "Stress":
-                tranches = "1 à 2 tranches"
-            elif trend_label == "Baissière" or vol_regime == "Stress":
-                tranches = "3 tranches espacées (prudence)"
-            else:
-                tranches = "2 tranches"
-
-            # Ligne 1 : Sizing
             st.markdown("#### Dimensionnement de position")
             s1, s2, s3, s4, s5 = st.columns(5)
-            s1.metric("Poids max conseillé", f"{final_weight * 100:.1f}%", f"Brut CVaR : {raw_weight * 100:.1f}%")
-            s2.metric("Montant cible", f"{cur}{target_amount:,.0f}")
-            s3.metric("Actions (entier)", f"{n_shares}", f"{cur}{real_amount:,.0f} engagés")
-            s4.metric("Perte extrême 1j (CVaR)", f"-{cur}{tail_loss_est:,.0f}", f"-{(tail_loss_est / portfolio_capital) * 100:.2f}% portef.")
-            s5.metric("Entrée suggérée", tranches)
+            s1.metric("Poids max conseillé", f"{ts['final_weight'] * 100:.1f}%", f"Brut CVaR : {ts['raw_weight'] * 100:.1f}%")
+            s2.metric("Montant cible", f"{cur}{ts['target_amount']:,.0f}")
+            s3.metric("Actions (entier)", f"{ts['n_shares']}", f"{cur}{ts['real_amount']:,.0f} engagés")
+            s4.metric("Perte extrême 1j (CVaR)", f"-{cur}{ts['tail_loss']:,.0f}", f"-{(ts['tail_loss'] / portfolio_capital) * 100:.2f}% portef.")
+            s5.metric("Cadence d'entrée", ts["tranches"])
 
-            # Ligne 2 : Timing
-            st.markdown("#### Régime & Timing")
+            st.markdown("#### Indicateurs de régime")
             t1, t2, t3, t4 = st.columns(4)
-            t1.metric("Tendance (MM200)", trend_label, f"{dist_mm200:+.1f}% vs MM200" if pd.notnull(dist_mm200) else "N/A")
-            t2.metric("Pente MM200 (20j)", f"{mm200_slope:+.2f}%" if pd.notnull(mm200_slope) else "—")
-            t3.metric("Momentum 12-1M", f"{mom_12_1:+.1f}%" if pd.notnull(mom_12_1) else "Historique < 1A")
-            t4.metric("Régime Volatilité", vol_regime, f"Ratio 20j/{long_win}j : {vol_ratio:.2f}x")
+            t1.metric("Tendance (MM200)", ts["trend_label"], f"{ts['dist_mm200']:+.1f}% vs MM200" if pd.notnull(ts["dist_mm200"]) else "N/A")
+            t2.metric("Pente MM200 (20j)", f"{ts['mm200_slope']:+.2f}%" if pd.notnull(ts["mm200_slope"]) else "—")
+            t3.metric("Momentum 12-1M", f"{ts['mom_12_1']:+.1f}%" if pd.notnull(ts["mom_12_1"]) else "Historique < 1A")
+            t4.metric("Régime Volatilité", ts["vol_regime"], f"Ratio 20j/{ts['long_win']}j : {ts['vol_ratio']:.2f}x")
 
-            # Graphiques Timing
             g1, g2 = st.columns([1.45, 1])
             with g1:
                 plot_slice = hist_prices.tail(504)
                 fig_trend = go.Figure()
                 fig_trend.add_trace(go.Scatter(x=plot_slice.index, y=plot_slice, name=primary_ticker, line=dict(color="#f8fafc", width=1.8)))
-                fig_trend.add_trace(go.Scatter(x=plot_slice.index, y=mm50.loc[plot_slice.index], name="MM50", line=dict(color=COLORS["accent"], width=1.3)))
-                fig_trend.add_trace(go.Scatter(x=plot_slice.index, y=mm200.loc[plot_slice.index], name="MM200", line=dict(color=COLORS["median"], width=1.6)))
+                fig_trend.add_trace(go.Scatter(x=plot_slice.index, y=ts["mm50"].loc[plot_slice.index], name="MM50", line=dict(color=COLORS["accent"], width=1.3)))
+                fig_trend.add_trace(go.Scatter(x=plot_slice.index, y=ts["mm200"].loc[plot_slice.index], name="MM200", line=dict(color=COLORS["median"], width=1.6)))
                 st.plotly_chart(
                     style_fig(fig_trend, yaxis_title=f"Prix ({cur})",
                               legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0)),
@@ -588,7 +785,7 @@ def render_terminal():
                 )
 
             with g2:
-                vr_slice = vol_ratio_series.tail(504)
+                vr_slice = ts["vol_ratio_series"].tail(504)
                 fig_vol = go.Figure()
                 fig_vol.add_trace(go.Scatter(
                     x=vr_slice.index, y=vr_slice, name="Vol 20j / Vol longue",
@@ -597,32 +794,28 @@ def render_terminal():
                 fig_vol.add_hline(y=1.0, line=dict(color=COLORS["muted"], dash="dot", width=1))
                 fig_vol.add_hline(y=1.35, line=dict(color=COLORS["down"], dash="dash", width=1.4),
                                   annotation_text="Seuil Stress (1.35x)", annotation_position="top left")
-                st.plotly_chart(
-                    style_fig(fig_vol, yaxis_title="Ratio de volatilité", showlegend=False),
-                    use_container_width=True,
-                )
+                st.plotly_chart(style_fig(fig_vol, yaxis_title="Ratio de volatilité", showlegend=False), use_container_width=True)
 
-            # Synthese factuelle des contraintes
             constraint = (
                 f"Plafonné par votre limite max par ligne ({max_pos_pct}%)."
-                if adj_weight > max_pos_pct / 100.0
+                if ts["adj_weight"] > max_pos_pct / 100.0
                 else (
-                    f"Réduit par le régime de stress (facteur {regime_mult:.2f}x)."
-                    if vol_ratio > 1.35
-                    else f"Contraint directement par la CVaR 95% ({cvar_95 * 100:.2f}% / jour)."
+                    f"Réduit par le régime de stress (facteur {ts['regime_mult']:.2f}x)."
+                    if ts["vol_ratio"] > 1.35
+                    else f"Contraint directement par la CVaR 95% ({ts['cvar_95'] * 100:.2f}% / jour)."
                 )
             )
             st.caption(f"Contrainte active : {constraint}")
 
             with st.expander("Méthodologie Timing & Sizing"):
                 st.latex(r"w_{\text{CVaR}} = \frac{\text{Budget de risque}_{1\text{j}}}{\text{CVaR}_{95\%}}, \qquad M_{12-1} = \frac{P_{t-21}}{P_{t-252}} - 1")
-                st.caption("Lorsque le ratio de volatilité 20j / 252j dépasse 1.35, le poids brut est divisé par ce ratio afin d'amortir les régimes de panique.")
+                st.caption("Le diagnostic combine 5 filtres objectifs ; il s'agit d'une lecture quantitative du régime de marché, pas d'un conseil en investissement personnalisé.")
         else:
             st.warning(f"Historique insuffisant pour {primary_ticker}.")
 
     # Onglet 3 : Monte Carlo
     with tab_mc:
-        if has_history:
+        if has_history and ts is not None:
             if dist_mode.startswith("Student"):
                 df_t, loc_t, scale_t = student_t.fit(log_ret.values)
                 df_t = max(float(df_t), 2.5)
@@ -634,15 +827,55 @@ def render_terminal():
             cum_log = np.vstack([np.zeros((1, n_simulations)), np.cumsum(daily_sim, axis=0)])
             paths = s0 * np.exp(cum_log)
             final_prices = paths[-1]
-            p5, p50, p95 = np.percentile(final_prices, [5, 50, 95])
-            prob_bull = float(np.mean(final_prices > s0) * 100)
 
+            p5, p50, p95 = np.percentile(final_prices, [5, 50, 95])
+            n_pos = int(np.sum(final_prices > s0))
+            n_neg = int(n_simulations - n_pos)
+            prob_bull = (n_pos / n_simulations) * 100
+            prob_bear = 100.0 - prob_bull
+
+            # Plus-values / moins-values sur la position dimensionnee
+            invest_base = ts["invest_base"]
+            pos_label = f"{ts['n_shares']} actions ({cur}{invest_base:,.0f})" if ts["n_shares"] > 0 else f"position cible ({cur}{invest_base:,.0f})"
+            pnl_p5 = invest_base * (p5 / s0 - 1)
+            pnl_p50 = invest_base * (p50 / s0 - 1)
+            pnl_p95 = invest_base * (p95 / s0 - 1)
+            avg_gain = float(np.mean(final_prices[final_prices > s0] / s0 - 1) * invest_base) if n_pos > 0 else 0.0
+            avg_loss = float(np.mean(final_prices[final_prices <= s0] / s0 - 1) * invest_base) if n_neg > 0 else 0.0
+            rr_ratio = abs(p95 - s0) / max(abs(s0 - p5), 1e-6)
+
+            # Lecture dynamique Monte Carlo
+            if prob_bull >= 60 and pnl_p50 > 0:
+                mc_badge, mc_col = "Asymétrie favorable", COLORS["up"]
+            elif prob_bull >= 48:
+                mc_badge, mc_col = "Distribution équilibrée", COLORS["median"]
+            else:
+                mc_badge, mc_col = "Biais baissier", COLORS["down"]
+
+            mc_text = (
+                f"Sur {n_simulations:,} scénarios à {forecast_days} jours ouvrés ({dist_mode}), "
+                f"<strong>{n_pos:,} trajectoires terminent en hausse ({prob_bull:.1f}%)</strong> contre "
+                f"<strong>{n_neg:,} en baisse ({prob_bear:.1f}%)</strong>. "
+                f"Sur votre {pos_label}, la plus-value médiane ressort à <strong>{fmt_pnl(pnl_p50, cur)} ({(p50 / s0 - 1) * 100:+.1f}%)</strong>, "
+                f"avec un scénario défavorable P5 à <strong>{fmt_pnl(pnl_p5, cur)}</strong> et un scénario haut P95 à <strong>{fmt_pnl(pnl_p95, cur)}</strong> "
+                f"(ratio potentiel haut / baisse P5 : {rr_ratio:.2f}x)."
+            )
+            render_signal_card(mc_badge, mc_col, mc_text, right_meta=f"Base P&L : {pos_label}")
+
+            # Ligne 1 : Trajectoires & parametres
             m1, m2, m3, m4, m5 = st.columns(5)
-            m1.metric("Drift annuel (μ)", f"{mu_ann * 100:+.1f}%")
-            m2.metric("Volatilité (σ)", f"{sigma_ann * 100:.1f}%")
-            m3.metric("Médiane (P50)", f"{cur}{p50:.2f}", f"{(p50 / s0 - 1) * 100:+.1f}%")
-            m4.metric("Intervalle 90%", f"{cur}{p5:.0f} – {cur}{p95:.0f}")
-            m5.metric("Prob. hausse", f"{prob_bull:.1f}%")
+            m1.metric("Trajectoires positives", f"{n_pos:,}", f"{prob_bull:.1f}% des scénarios")
+            m2.metric("Trajectoires négatives", f"{n_neg:,}", f"-{prob_bear:.1f}% des scénarios", delta_color="inverse")
+            m3.metric("Prix médian (P50)", f"{cur}{p50:.2f}", f"{(p50 / s0 - 1) * 100:+.1f}%")
+            m4.metric("Drift annuel (μ)", f"{mu_ann * 100:+.1f}%")
+            m5.metric("Volatilité (σ)", f"{sigma_ann * 100:.1f}%")
+
+            # Ligne 2 : Plus-values / moins-values estimees
+            p_c1, p_c2, p_c3, p_c4 = st.columns(4)
+            p_c1.metric("P&L Médian (P50)", fmt_pnl(pnl_p50, cur), f"{(p50 / s0 - 1) * 100:+.1f}%")
+            p_c2.metric("Scénario bas (P5)", fmt_pnl(pnl_p5, cur), f"{(p5 / s0 - 1) * 100:+.1f}%")
+            p_c3.metric("Scénario haut (P95)", fmt_pnl(pnl_p95, cur), f"{(p95 / s0 - 1) * 100:+.1f}%")
+            p_c4.metric("Gain moyen / Perte moy.", f"{fmt_pnl(avg_gain, cur)}", f"vs {fmt_pnl(avg_loss, cur)}")
 
             c1, c2 = st.columns([3, 2])
             with c1:
@@ -683,6 +916,7 @@ def render_terminal():
 
             with st.expander("Méthodologie stochastique"):
                 st.latex(r"S_t = S_0 \exp\left(\left(\mu - \frac{1}{2}\sigma^2\right)t + \sigma W_t\right)")
+                st.caption("Ces projections reflètent la distribution historique sur la fenêtre sélectionnée et ne garantissent pas les performances futures.")
         else:
             st.warning(f"Historique insuffisant pour {primary_ticker}.")
 
@@ -696,6 +930,15 @@ def render_terminal():
             running_max = hist_prices.cummax()
             drawdown = (hist_prices - running_max) / running_max
             max_dd = float(drawdown.min())
+
+            tail_badge = "Queues épaisses marquées" if r_stats["kurt"] > 3 else "Distribution modérée"
+            tail_col = COLORS["down"] if r_stats["kurt"] > 3 else COLORS["accent"]
+            risk_txt = (
+                f"Dans les {(1 - conf) * 100:.0f}% pires séances, la perte moyenne quotidienne (CVaR) atteint "
+                f"<strong>{r_stats['cvar'] * 100:.2f}%</strong> ({cur}{s0 * r_stats['cvar']:.2f}/action). "
+                f"Sur les {history_years} dernières années, le pire creux historique (Max Drawdown) a été de <strong>{max_dd * 100:.1f}%</strong>."
+            )
+            render_signal_card(tail_badge, tail_col, risk_txt, right_meta=f"Excess Kurtosis : {r_stats['kurt']:.2f}")
 
             r1, r2, r3, r4, r5 = st.columns(5)
             r1.metric("Skewness", f"{r_stats['skew']:.3f}")
@@ -727,6 +970,14 @@ def render_terminal():
                 var_b = float(ret_pair[macro_ticker].var())
                 beta = float(ret_pair[primary_ticker].cov(ret_pair[macro_ticker]) / var_b) if var_b > 0 else np.nan
 
+                beta_badge = "Sensibilité amplifiée" if beta > 1.25 else ("Profil défensif" if beta < 0.8 else "Sensibilité proche du marché")
+                beta_col = COLORS["median"] if beta > 1.25 else COLORS["accent"]
+                bench_txt = (
+                    f"Avec un Bêta de <strong>{beta:.2f}</strong> face à {macro_ticker}, une variation de ±1% de l'indice s'accompagne en moyenne de "
+                    f"<strong>±{beta:.2f}%</strong> sur {primary_ticker} (corrélation des rendements : {corr_ret:.2f})."
+                )
+                render_signal_card(beta_badge, beta_col, bench_txt, right_meta=f"Benchmark : {macro_ticker}")
+
                 b1, b2, b3 = st.columns(3)
                 b1.metric("Corrélation rendements", f"{corr_ret:.3f}")
                 b2.metric("Corrélation 63j (3M)", f"{corr_63:.3f}" if pd.notnull(corr_63) else "—")
@@ -741,3 +992,4 @@ if st.session_state.page == "home":
     render_home()
 else:
     render_terminal()
+
